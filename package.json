@@ -7,9 +7,12 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "tail": "wrangler tail"
+    "tail": "wrangler tail",
+    "build": "node scripts/build.mjs",
+    "release:notes": "node scripts/build.mjs --notes"
   },
   "devDependencies": {
+    "esbuild": "^0.25.5",
     "wrangler": "^3.0.0"
   }
 }
