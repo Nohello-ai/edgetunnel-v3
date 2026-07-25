@@ -122,6 +122,8 @@ jobs:
           body_path: release-notes.md
           draft: ${{ github.event_name == 'workflow_dispatch' && inputs.draft || false }}
           generate_release_notes: true
+          make_latest: true
+          fail_on_unmatched_files: true
           files: |
             dist/worker.js
             dist/edgetunnel-v3-${{ steps.ver.outputs.tag }}.js
@@ -129,22 +131,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Commit dist/ on main (optional snapshot)
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # only update dist on default branch tip if we can
-          git fetch origin main || true
-          if git show-ref --verify --quiet refs/remotes/origin/main; then
-            git checkout -B dist-snapshot origin/main
-            mkdir -p dist
-            # restore built artifacts from previous step workspace - still present
-            git add dist/worker.js dist/build-meta.json package.json
-            if git diff --cached --quiet; then
-              echo "No dist changes to commit"
-            else
-              git commit -m "chore(release): bundle worker.js ${{ steps.ver.outputs.tag }} [skip ci]"
-              git push origin dist-snapshot:main || echo "skip push dist (protected or conflict)"
-            fi
-          fi
+
