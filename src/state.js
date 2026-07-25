@@ -35,7 +35,9 @@ let HOST缓存键 = null;
 let HOST缓存值 = null;
 
 // 更新函数
+/** @deprecated 配置请用请求局部变量，勿再写入全局 */
 export function setConfig_JSON(value) { config_JSON = value; }
+/** @deprecated 配置请用请求局部变量 */
 export function getConfig_JSON() { return config_JSON; }
 
 export function set缓存SOCKS5白名单(value) { 缓存SOCKS5白名单 = value; }
