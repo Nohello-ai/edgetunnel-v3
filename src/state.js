@@ -26,6 +26,14 @@ export let TCP并发拨号数 = 2;
 export let 反代并发拨号数 = 1;
 export let 预加载竞速拨号 = false;
 
+// 身份推导缓存（密码/UUID/KEY 未变时跨请求复用）
+let 身份缓存键 = null;
+let 身份缓存值 = null;
+
+// HOST 列表缓存
+let HOST缓存键 = null;
+let HOST缓存值 = null;
+
 // 更新函数
 export function setConfig_JSON(value) { config_JSON = value; }
 export function getConfig_JSON() { return config_JSON; }
@@ -47,3 +55,30 @@ export function get反代并发拨号数() { return 反代并发拨号数; }
 
 export function set预加载竞速拨号(value) { 预加载竞速拨号 = value; }
 export function get预加载竞速拨号() { return 预加载竞速拨号; }
+
+/**
+ * 缓存用户身份（userID / MD5），env 相关字段不变时直接复用
+ * @param {string} 缓存键
+ * @param {() => Promise<{userID: string, userIDMD5: string}>} 计算函数
+ */
+export async function 获取缓存身份(缓存键, 计算函数) {
+	if (身份缓存键 === 缓存键 && 身份缓存值) return 身份缓存值;
+	const 结果 = await 计算函数();
+	身份缓存键 = 缓存键;
+	身份缓存值 = 结果;
+	return 结果;
+}
+
+/**
+ * 缓存 env.HOST 解析结果
+ * @param {string|undefined|null} hostEnv
+ * @param {() => Promise<string[]>} 计算函数
+ */
+export async function 获取缓存HOST列表(hostEnv, 计算函数) {
+	const 键 = hostEnv == null ? '' : String(hostEnv);
+	if (HOST缓存键 === 键 && HOST缓存值) return HOST缓存值;
+	const 结果 = await 计算函数();
+	HOST缓存键 = 键;
+	HOST缓存值 = 结果;
+	return 结果;
+}
