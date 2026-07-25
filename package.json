@@ -1,0 +1,15 @@
+{
+  "name": "edgetunnel-v3",
+  "version": "3.0.0",
+  "description": "Cloudflare Workers edge tunnel proxy with modular architecture (VLESS/Trojan/Shadowsocks over WS/gRPC/XHTTP)",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

@@ -1,0 +1,25 @@
+name = "edgetunnel-v3"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# KV 命名空间绑定（部署前需先创建 KV namespace 并替换 id）
+[[kv_namespaces]]
+binding = "KV"
+id = "your-kv-namespace-id"
+
+# 可选环境变量（按需配置，也可在 Cloudflare Dashboard 中设置）
+[vars]
+# ADMIN = ""
+# UUID = ""
+# HOST = ""
+# KEY = ""
+# PROXYIP = ""
+# GO2SOCKS5 = ""
+# URL = ""
+# DEBUG = ""
+# BEST_SUB = ""
+# OFF_LOG = ""
+# TCP_CONCURRENT_DIAL = ""
+# PROXY_CONCURRENT_DIAL = ""
+# PRELOAD_RACE_DIAL = ""
