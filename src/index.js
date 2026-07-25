@@ -5,7 +5,6 @@
 
 import { Version, Pages静态页面, 特征码字典 } from './constants.js';
 import {
-	setConfig_JSON, getConfig_JSON,
 	set缓存SOCKS5白名单, get缓存SOCKS5白名单,
 	set调试日志打印, get调试日志打印,
 	setSOCKS5白名单, getSOCKS5白名单,
@@ -130,7 +129,7 @@ export default {
 				} else if (访问路径 === 'login') {//处理登录页面和登录请求
 					const cookies = request.headers.get('Cookie') || '';
 					const authCookie = cookies.split(';').find(c => c.trim().startsWith('auth='))?.split('=')[1];
-					if (authCookie == await MD5MD5(UA + 加密秘钥 + 管理员密码)) return new Response('重定向中...', { status: 302, headers: { 'Location': '/admin' } });
+					if (authCookie === await MD5MD5(UA + 加密秘钥 + 管理员密码)) return new Response('重定向中...', { status: 302, headers: { 'Location': '/admin' } });
 					if (request.method === 'POST') {
 						const formData = await request.text();
 						const params = new URLSearchParams(formData);
@@ -244,14 +243,13 @@ export default {
 						return new Response(JSON.stringify(检测代理响应, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 					}
 
-					setConfig_JSON(await 读取config_JSON(env, host, userID, UA));
+					let config_JSON = await 读取config_JSON(env, host, userID, UA);
 
 					if (访问路径 === 'admin/init') {// 重置配置为默认值
 						try {
-							setConfig_JSON(await 读取config_JSON(env, host, userID, UA, true));
-							ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Init_Config', getConfig_JSON()));
-							const initConfig = getConfig_JSON();
-							initConfig.init = '配置已重置为默认值';
+							config_JSON = await 读取config_JSON(env, host, userID, UA, true);
+							ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Init_Config', config_JSON));
+							const initConfig = { ...config_JSON, init: '配置已重置为默认值' };
 							return new Response(JSON.stringify(initConfig, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 						} catch (err) {
 							const errorResponse = { msg: '配置重置失败，失败原因：' + err.message, error: err.message };
@@ -266,7 +264,7 @@ export default {
 
 								// 保存到 KV
 								await env.KV.put('config.json', JSON.stringify(newConfig, null, 2));
-								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Config', getConfig_JSON()));
+								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Config', config_JSON));
 								return new Response(JSON.stringify({ success: true, message: '配置已保存' }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 							} catch (error) {
 								console.error('保存配置失败:', error);
@@ -292,7 +290,7 @@ export default {
 
 								// 保存到 KV
 								await env.KV.put('cf.json', JSON.stringify(CF_JSON, null, 2));
-								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Config', getConfig_JSON()));
+								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Config', config_JSON));
 								return new Response(JSON.stringify({ success: true, message: '配置已保存' }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 							} catch (error) {
 								console.error('保存配置失败:', error);
@@ -308,7 +306,7 @@ export default {
 									if (!newConfig.BotToken || !newConfig.ChatID) return new Response(JSON.stringify({ error: '配置不完整' }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 									await env.KV.put('tg.json', JSON.stringify(newConfig, null, 2));
 								}
-								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Config', getConfig_JSON()));
+								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Config', config_JSON));
 								return new Response(JSON.stringify({ success: true, message: '配置已保存' }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 							} catch (error) {
 								console.error('保存配置失败:', error);
@@ -318,7 +316,7 @@ export default {
 							try {
 								const customIPs = await request.text();
 								await env.KV.put('ADD.txt', customIPs);// 保存到 KV
-								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Custom_IPs', getConfig_JSON()));
+								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Custom_IPs', config_JSON));
 								return new Response(JSON.stringify({ success: true, message: '自定义IP已保存' }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 							} catch (error) {
 								console.error('保存自定义IP失败:', error);
@@ -326,16 +324,16 @@ export default {
 							}
 						} else return new Response(JSON.stringify({ error: '不支持的POST请求路径' }), { status: 404, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 					} else if (访问路径 === 'admin/config.json') {// 处理 admin/config.json 请求，返回JSON
-						return new Response(JSON.stringify(getConfig_JSON(), null, 2), { status: 200, headers: { 'Content-Type': 'application/json' } });
+						return new Response(JSON.stringify(config_JSON, null, 2), { status: 200, headers: { 'Content-Type': 'application/json' } });
 					} else if (区分大小写访问路径 === 'admin/ADD.txt') {// 处理 admin/ADD.txt 请求，返回本地优选IP
 						let 本地优选IP = await env.KV.get('ADD.txt') || 'null';
-						if (本地优选IP == 'null') 本地优选IP = (await 生成随机IP(request, getConfig_JSON().优选订阅生成.本地IP库.随机数量, getConfig_JSON().优选订阅生成.本地IP库.指定端口))[1];
+						if (本地优选IP === 'null') 本地优选IP = (await 生成随机IP(request, config_JSON.优选订阅生成.本地IP库.随机数量, config_JSON.优选订阅生成.本地IP库.指定端口))[1];
 						return new Response(本地优选IP, { status: 200, headers: { 'Content-Type': 'text/plain;charset=utf-8', 'asn': request.cf.asn } });
 					} else if (访问路径 === 'admin/cf.json') {// CF配置文件
 						return new Response(JSON.stringify(request.cf, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 					}
 
-					ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Admin_Login', getConfig_JSON()));
+					ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Admin_Login', config_JSON));
 					return fetch(Pages静态页面 + '/admin' + url.search);
 				} else if (访问路径 === 'logout' || uuidRegex.test(访问路径)) {//清除cookie并跳转到登录页面
 					const 响应 = new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
@@ -353,8 +351,7 @@ export default {
 					]);
 					const 订阅转换后端请求订阅 = 请求TOKEN === 今日订阅转换后端专属TOKEN || 请求TOKEN === 昨日订阅转换后端专属TOKEN;
 					if (用户客户端请求订阅 || 订阅转换后端请求订阅 || 作为优选订阅生成器) {
-						setConfig_JSON(await 读取config_JSON(env, host, userID, UA));
-						const config_JSON = getConfig_JSON();
+						const config_JSON = await 读取config_JSON(env, host, userID, UA);
 						if (作为优选订阅生成器) ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Get_Best_SUB', config_JSON, false));
 						else ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Get_SUB', config_JSON));
 						const ua = UA.toLowerCase();
@@ -565,7 +562,9 @@ export default {
 				return new Response(响应内容, { status: 反代响应.status, headers: { ...Object.fromEntries(反代响应.headers), 'Cache-Control': 'no-store' } });
 			}
 			return 反代响应;
-		} catch (error) { }
+		} catch (error) {
+			log(`[伪装页] 反代失败: ${error?.message || error}`);
+		}
 		return new Response(await nginx(), { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
 	}
 };
