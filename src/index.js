@@ -167,6 +167,7 @@ export default {
 						return new Response(JSON.stringify({ success: false, data: [] }, null, 2), { status: 403, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 					} else if (访问路径 === 'admin/check') {// 代理检查
 						return await 处理代理检测(request, url);
+					}
 
 					let config_JSON = await 读取config_JSON(env, host, userID, UA);
 
