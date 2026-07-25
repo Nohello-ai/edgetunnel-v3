@@ -8,9 +8,8 @@ import { 获取传输协议配置, 获取传输路径参数值 } from '../net/pr
 import { 整理成数组, 掩码敏感信息 } from '../utils/misc.js';
 import { getSOCKS5白名单 } from '../state.js';
 
-let config_JSON;
-
 export async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重置配置 = false) {
+	let config_JSON;
 	const _p = 特征码字典[0];
 	const host = hostname, Ali_DoH = "https://dns.alidns.com/dns-query", ECH_SNI = "cloudflare-ech.com", 占位符 = '{{IP:PORT}}', 初始化开始时间 = performance.now(), 默认配置JSON = {
 		TIME: new Date().toISOString(),
