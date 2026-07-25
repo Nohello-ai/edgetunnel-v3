@@ -1,7 +1,7 @@
 /**
  * edgetunnel-v3 — single-file Worker bundle
  * version: 3.0.0
- * built:   2026-07-25T15:26:23.594Z
+ * built:   2026-07-25T15:54:22.000Z
  * source:  https://github.com/Nohello-ai/edgetunnel-v3
  *
  * Paste this entire file into Cloudflare Workers dashboard,
@@ -40,6 +40,10 @@ var SOCKS5白名单 = [
 var TCP并发拨号数 = 2;
 var 反代并发拨号数 = 1;
 var 预加载竞速拨号 = false;
+var 身份缓存键 = null;
+var 身份缓存值 = null;
+var HOST缓存键 = null;
+var HOST缓存值 = null;
 function setConfig_JSON(value) {
   config_JSON = value;
 }
@@ -82,17 +86,55 @@ function set预加载竞速拨号(value) {
 function get预加载竞速拨号() {
   return 预加载竞速拨号;
 }
+async function 获取缓存身份(缓存键, 计算函数) {
+  if (身份缓存键 === 缓存键 && 身份缓存值) return 身份缓存值;
+  const 结果 = await 计算函数();
+  身份缓存键 = 缓存键;
+  身份缓存值 = 结果;
+  return 结果;
+}
+async function 获取缓存HOST列表(hostEnv, 计算函数) {
+  const 键 = hostEnv == null ? "" : String(hostEnv);
+  if (HOST缓存键 === 键 && HOST缓存值) return HOST缓存值;
+  const 结果 = await 计算函数();
+  HOST缓存键 = 键;
+  HOST缓存值 = 结果;
+  return 结果;
+}
 
 // src/utils/crypto.js
+var 文本编码器 = new TextEncoder();
+var MD5MD5缓存 = /* @__PURE__ */ new Map();
+var MD5MD5缓存上限 = 256;
+function 字节转十六进制(bytes) {
+  let hex = "";
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, "0");
+  }
+  return hex;
+}
 async function MD5MD5(文本) {
-  const 编码器 = new TextEncoder();
-  const 第一次哈希 = await crypto.subtle.digest("MD5", 编码器.encode(文本));
-  const 第一次哈希数组 = Array.from(new Uint8Array(第一次哈希));
-  const 第一次十六进制 = 第一次哈希数组.map((字节) => 字节.toString(16).padStart(2, "0")).join("");
-  const 第二次哈希 = await crypto.subtle.digest("MD5", 编码器.encode(第一次十六进制.slice(7, 27)));
-  const 第二次哈希数组 = Array.from(new Uint8Array(第二次哈希));
-  const 第二次十六进制 = 第二次哈希数组.map((字节) => 字节.toString(16).padStart(2, "0")).join("");
-  return 第二次十六进制.toLowerCase();
+  const 键 = String(文本 ?? "");
+  const 命中 = MD5MD5缓存.get(键);
+  if (命中) return 命中;
+  const 任务 = (async () => {
+    const 第一次哈希 = new Uint8Array(await crypto.subtle.digest("MD5", 文本编码器.encode(键)));
+    const 第一次十六进制 = 字节转十六进制(第一次哈希);
+    const 第二次哈希 = new Uint8Array(await crypto.subtle.digest("MD5", 文本编码器.encode(第一次十六进制.slice(7, 27))));
+    return 字节转十六进制(第二次哈希);
+  })();
+  MD5MD5缓存.set(键, 任务);
+  try {
+    const 结果 = await 任务;
+    if (MD5MD5缓存.size > MD5MD5缓存上限) {
+      const 最旧键 = MD5MD5缓存.keys().next().value;
+      MD5MD5缓存.delete(最旧键);
+    }
+    return 结果;
+  } catch (error) {
+    MD5MD5缓存.delete(键);
+    throw error;
+  }
 }
 function sha224(s) {
   const K = [1116352408, 1899447441, 3049323471, 3921009573, 961987163, 1508970993, 2453635748, 2870763221, 3624381080, 310598401, 607225278, 1426881987, 1925078388, 2162078206, 2614888103, 3248222580, 3835390401, 4022224774, 264347078, 604807628, 770255983, 1249150122, 1555081692, 1996064986, 2554220882, 2821834349, 2952996808, 3210313671, 3336571891, 3584528711, 113926993, 338241895, 666307205, 773529912, 1294757372, 1396182291, 1695183700, 1986661051, 2177026350, 2456956037, 2730485921, 2820302411, 3259730800, 3345764771, 3516065817, 3600352804, 4094571909, 275423344, 430227734, 506948616, 659060556, 883997877, 958139571, 1322822218, 1537002063, 1747873779, 1955562222, 2024104815, 2227730452, 2361852424, 2428436474, 2756734187, 3204031479, 3329325298];
@@ -5727,11 +5769,20 @@ var index_default = {
     const upgradeHeader = (request.headers.get("Upgrade") || "").toLowerCase(), contentType = (request.headers.get("content-type") || "").toLowerCase();
     const 管理员密码 = env.ADMIN || env.admin || env.PASSWORD || env.password || env.pswd || env.TOKEN || env.KEY || env.UUID || env.uuid;
     const 加密秘钥 = env.KEY || "勿动此默认密钥，有需求请自行通过添加变量KEY进行修改";
-    const userIDMD5 = await MD5MD5(管理员密码 + 加密秘钥);
     const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
     const envUUID = env.UUID || env.uuid;
-    const userID = envUUID && uuidRegex.test(envUUID) ? envUUID.toLowerCase() : [userIDMD5.slice(0, 8), userIDMD5.slice(8, 12), "4" + userIDMD5.slice(13, 16), "8" + userIDMD5.slice(17, 20), userIDMD5.slice(20)].join("-");
-    const hosts = env.HOST ? (await 整理成数组(env.HOST)).map((h) => h.toLowerCase().replace(/^https?:\/\//, "").split("/")[0].split(":")[0]) : [url.hostname];
+    const { userID, userIDMD5 } = await 获取缓存身份(
+      `${管理员密码 ?? ""}\0${加密秘钥}\0${envUUID ?? ""}`,
+      async () => {
+        const md5 = await MD5MD5(管理员密码 + 加密秘钥);
+        const id = envUUID && uuidRegex.test(envUUID) ? envUUID.toLowerCase() : [md5.slice(0, 8), md5.slice(8, 12), "4" + md5.slice(13, 16), "8" + md5.slice(17, 20), md5.slice(20)].join("-");
+        return { userID: id, userIDMD5: md5 };
+      }
+    );
+    const hosts = env.HOST ? await 获取缓存HOST列表(
+      env.HOST,
+      async () => (await 整理成数组(env.HOST)).map((h) => h.toLowerCase().replace(/^https?:\/\//, "").split("/")[0].split(":")[0])
+    ) : [url.hostname];
     const host = hosts[0];
     const 访问路径 = url.pathname.slice(1).toLowerCase();
     set调试日志打印(["1", "true"].includes(env.DEBUG) || get调试日志打印());
