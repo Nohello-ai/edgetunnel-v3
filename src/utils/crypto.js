@@ -2,23 +2,47 @@
  * 加密工具函数
  */
 
+const 文本编码器 = new TextEncoder();
+const MD5MD5缓存 = new Map();
+const MD5MD5缓存上限 = 256;
+
+function 字节转十六进制(bytes) {
+	let hex = '';
+	for (let i = 0; i < bytes.length; i++) {
+		hex += bytes[i].toString(16).padStart(2, '0');
+	}
+	return hex;
+}
+
 /**
- * 双重 MD5 哈希
+ * 双重 MD5 哈希（isolate 内按输入文本缓存，避免热路径重复计算）
  * @param {string} 文本
  * @returns {Promise<string>} 十六进制哈希字符串
  */
 export async function MD5MD5(文本) {
-	const 编码器 = new TextEncoder();
+	const 键 = String(文本 ?? '');
+	const 命中 = MD5MD5缓存.get(键);
+	if (命中) return 命中;
 
-	const 第一次哈希 = await crypto.subtle.digest('MD5', 编码器.encode(文本));
-	const 第一次哈希数组 = Array.from(new Uint8Array(第一次哈希));
-	const 第一次十六进制 = 第一次哈希数组.map(字节 => 字节.toString(16).padStart(2, '0')).join('');
+	const 任务 = (async () => {
+		const 第一次哈希 = new Uint8Array(await crypto.subtle.digest('MD5', 文本编码器.encode(键)));
+		const 第一次十六进制 = 字节转十六进制(第一次哈希);
+		const 第二次哈希 = new Uint8Array(await crypto.subtle.digest('MD5', 文本编码器.encode(第一次十六进制.slice(7, 27))));
+		return 字节转十六进制(第二次哈希);
+	})();
 
-	const 第二次哈希 = await crypto.subtle.digest('MD5', 编码器.encode(第一次十六进制.slice(7, 27)));
-	const 第二次哈希数组 = Array.from(new Uint8Array(第二次哈希));
-	const 第二次十六进制 = 第二次哈希数组.map(字节 => 字节.toString(16).padStart(2, '0')).join('');
-
-	return 第二次十六进制.toLowerCase();
+	MD5MD5缓存.set(键, 任务);
+	try {
+		const 结果 = await 任务;
+		if (MD5MD5缓存.size > MD5MD5缓存上限) {
+			const 最旧键 = MD5MD5缓存.keys().next().value;
+			MD5MD5缓存.delete(最旧键);
+		}
+		return 结果;
+	} catch (error) {
+		MD5MD5缓存.delete(键);
+		throw error;
+	}
 }
 
 /**
