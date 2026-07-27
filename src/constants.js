@@ -4,7 +4,7 @@
 
 export const Version = '2026-07-27 19:20:00';
 
-export const Pages静态页面 = 'https://nohello-ai.github.io/edt-pages-pro';
+export const Pages静态页面 = 'https://edt-pages.github.io';
 
 // WebSocket 早期数据参数
 export const WS早期数据最大字节 = 8 * 1024;
