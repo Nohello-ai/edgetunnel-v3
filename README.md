@@ -11,7 +11,7 @@
 | 传输 | WebSocket · gRPC · XHTTP |
 | 出站 | 直连 · ProxyIP · SOCKS5 / HTTP(S) / TURN / SSTP |
 | 配置存储 | Workers KV（`KV` 绑定） |
-| 当前安全版本 | **v3.0.3**（`KEY` 必填，见下方环境变量） |
+| 当前安全版本 | **v3.0.3**（运行时必填 **`ADMIN` + `KEY`**，见下方环境变量） |
 
 > 发版与粘贴部署见 [RELEASE.md](./RELEASE.md)。代码审查见 [CODE_REVIEW.md](./CODE_REVIEW.md)。
 
@@ -58,24 +58,26 @@ Worker 还负责：
 
 1. 创建 Worker，粘贴 `dist/worker.js`（或 `wrangler deploy`）
 2. 创建 **KV** 命名空间，绑定名必须为 **`KV`**
-3. 在 Worker 设置环境变量（至少 `KEY` + 管理员密码类变量）
+3. 在 Worker 设置环境变量（至少 **`ADMIN` + `KEY`**）
 
 ### 2. 最低可用配置
 
 | 变量 | 要求 |
 |------|------|
+| **`ADMIN`** | **必填**（v3.0.3+）。管理面板登录口令；也可用 `PASSWORD` / `TOKEN` 等密码类变量。**不可**再用 `KEY` / `UUID` 顶替 |
 | **`KEY`** | **必填**（v3.0.3+）。随机字符串，**长度 ≥ 16**，不要用源码里的默认提示文案 |
-| **`ADMIN`**（或见下方回退链） | 管理面板登录密码；也参与身份派生 |
 | **`UUID`**（推荐） | 标准 UUID v4；不设则由密码+KEY 用哈希派生 |
 | **KV 绑定** | 名称为 `KV`；无 KV 时部分能力会降级 |
 
-未设置合法 `KEY` 时，Worker 对所有请求返回：
+缺运行时必填变量时，Worker 对所有请求返回 **503**：
 
 ```json
-{ "error": "KEY_REQUIRED", "message": "请设置环境变量 KEY：..." }
+{ "error": "ADMIN_REQUIRED", "message": "请设置环境变量 ADMIN…" }
 ```
 
-状态码 **503**。
+```json
+{ "error": "KEY_REQUIRED", "message": "请设置环境变量 KEY…" }
+```
 
 ### 3. 常用入口
 
@@ -99,8 +101,8 @@ Worker 还负责：
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| **`KEY`** | **是** | 加密/鉴权主密钥。参与：userID 派生、登录 cookie、快速订阅路径。长度 ≥ 16；禁止使用旧默认中文提示串。 |
-| **`ADMIN`** | 强烈建议 | 管理面板密码。也可用下列别名（按优先级取第一个有值的）：`admin` → `PASSWORD` → `password` → `pswd` → `TOKEN` → `KEY` → `UUID` → `uuid`。**注意**：若只设了 `KEY` 没设 `ADMIN`，`KEY` 会同时当管理密码，不推荐。 |
+| **`ADMIN`** | **是** | 管理面板登录口令，并参与 userID 派生。别名（按优先级）：`admin` → `PASSWORD` → `password` → `pswd` → `TOKEN`。**不再**回退到 `KEY` / `UUID`。缺省 → **503 ADMIN_REQUIRED**。 |
+| **`KEY`** | **是** | 加密/鉴权主密钥。参与：userID 派生、登录 cookie、快速订阅路径。长度 ≥ 16；禁止使用旧默认中文提示串。缺省 → **503 KEY_REQUIRED**。 |
 | **`UUID`** / `uuid` | 推荐 | 客户端使用的用户 UUID（v4 格式）。未设置时用 `MD5MD5(管理员密码 + KEY)` 拼成类 UUID。 |
 
 ### 节点与域名
@@ -154,8 +156,8 @@ Worker 还负责：
 ### 环境变量关系简图
 
 ```
-KEY  ──► 加密/cookie/快速订阅路径 / 参与 userID 派生
-ADMIN ──► 登录密码 / 参与 userID 派生（及别名回退链）
+ADMIN ──► 登录口令 / 参与 userID 派生（密码类变量；不与 KEY 混用）
+KEY   ──► 加密/cookie/快速订阅路径 / 参与 userID 派生
 UUID  ──► 若合法则固定为客户端 UUID，否则由 ADMIN+KEY 哈希派生
 HOST  ──► 订阅节点域名
 PROXYIP / GO2SOCKS5 / 查询参数 ──► 出站怎么走
@@ -173,8 +175,8 @@ KV    ──► 面板里改的配置落在哪
 请求进入 Worker
     │
     ├─ 1. 规范化 URL（处理异常编码的 ? 等）
-    ├─ 2. 读取 env → 校验 KEY（失败则 503）
-    ├─ 3. 解析管理员密码、派生/缓存 userID
+    ├─ 2. 读取 env → 校验 ADMIN + KEY（失败则 503）
+    ├─ 3. 派生/缓存 userID
     ├─ 4. 解析 HOST 列表、调试/拨号参数、默认 PROXYIP
     │
     ├─ 路径/方法分流 ──┬── /version          → 版本校验接口
@@ -303,7 +305,7 @@ GET /admin*
 
 ### 7. 安全相关（部署必读）
 
-- **v3.0.3+ 必须设置 `KEY`**，否则全站 503  
+- **v3.0.3+ 必须设置 `ADMIN` + `KEY`**，缺一则全站 503  
 - 登录 cookie 绑定 **User-Agent**，换浏览器/UA 需重新登录  
 - 审查报告中仍有：登录无限速、MD5 用于鉴权派生、入口函数过大等，见 [CODE_REVIEW.md](./CODE_REVIEW.md)
 
@@ -358,7 +360,7 @@ npm run tail     # 实时日志
 | 标签 | 说明 |
 |------|------|
 | `v3.0.2-pre-require-key` | 强制 KEY 之前的基线 |
-| `v3.0.3` | 强制 KEY、拒绝默认密钥 |
+| `v3.0.3` | 强制 ADMIN + KEY、拒绝默认密钥 |
 
 ```bash
 # 回退到改 KEY 策略之前

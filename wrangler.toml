@@ -9,9 +9,11 @@ binding = "KV"
 id = "your-kv-namespace-id"
 
 # 环境变量（也可在 Cloudflare Dashboard 中设置）
-# KEY 必填：随机字符串，长度 >= 16；未设置或使用旧默认文案时 Worker 返回 503
+# 运行时必填：
+#   ADMIN — 管理面板登录口令（也可用 PASSWORD/TOKEN 等密码类变量；不可用 KEY/UUID 顶替）
+#   KEY   — 随机字符串，长度 >= 16；未设置或使用旧默认文案时返回 503 KEY_REQUIRED
 [vars]
-# ADMIN = ""
+# ADMIN = "replace-with-admin-password"
 # UUID = ""
 # HOST = ""
 # KEY = "replace-with-a-long-random-secret"

@@ -45,7 +45,15 @@ export default {
 		const url = new URL(请求URL文本);
 		const UA = request.headers.get('User-Agent') || 'null';
 		const upgradeHeader = (request.headers.get('Upgrade') || '').toLowerCase(), contentType = (request.headers.get('content-type') || '').toLowerCase();
-		const 管理员密码 = env.ADMIN || env.admin || env.PASSWORD || env.password || env.pswd || env.TOKEN || env.KEY || env.UUID || env.uuid;
+		// 管理密码必填：仅认 ADMIN 及密码类别名，不再回退到 KEY/UUID（避免密钥与口令混用）
+		const 管理员密码原始 = env.ADMIN || env.admin || env.PASSWORD || env.password || env.pswd || env.TOKEN;
+		const 管理员密码 = typeof 管理员密码原始 === 'string' ? 管理员密码原始.replace(/[\r\n]/g, '').trim() : (管理员密码原始 ?? '');
+		if (!管理员密码) {
+			return new Response(JSON.stringify({
+				error: 'ADMIN_REQUIRED',
+				message: '请设置环境变量 ADMIN（或 PASSWORD / TOKEN 等密码类变量）作为管理面板登录口令。不可再用 KEY/UUID 顶替。',
+			}), { status: 503, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+		}
 		// KEY 必填：禁止使用可预测的默认密钥（见 CODE_REVIEW #1）
 		const 禁止使用的默认密钥 = '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改';
 		const 加密秘钥 = typeof env.KEY === 'string' ? env.KEY.trim() : '';
@@ -134,7 +142,7 @@ export default {
 						const formData = await request.text();
 						const params = new URLSearchParams(formData);
 						const 输入密码 = params.get('password');
-						if (输入密码 === (typeof 管理员密码 === 'string' ? 管理员密码.replace(/[\r\n]/g, '') : 管理员密码)) {
+						if (输入密码 === 管理员密码) {
 							// 密码正确，设置cookie并返回成功标记
 							const 响应 = new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 							响应.headers.set('Set-Cookie', `auth=${await MD5MD5(UA + 加密秘钥 + 管理员密码)}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`);

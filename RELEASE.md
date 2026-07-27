@@ -35,8 +35,11 @@ https://github.com/Nohello-ai/edgetunnel-v3/releases
 1. Cloudflare Dashboard → Workers → 你的脚本 → Edit code  
 2. 下载 Release 里的 `worker.js`，全选复制粘贴  
 3. Deploy  
-4. 绑定 KV（名称 `KV`），**必须**设置 `KEY`（随机串，≥16 字符），以及 `ADMIN` / `UUID` 等  
-   - 自 v3.0.3 起：未设置 `KEY`、KEY 过短、或仍使用旧默认提示文案时，Worker 返回 **503 KEY_REQUIRED**  
+4. 绑定 KV（名称 `KV`），**必须**设置运行时变量：  
+   - **`ADMIN`**（或 `PASSWORD` / `TOKEN` 等密码类）：管理登录口令；**不可**再用 KEY/UUID 顶替  
+   - **`KEY`**（随机串，≥16 字符）：加密/鉴权主密钥  
+   - 推荐再设 `UUID` 等  
+   - 自 v3.0.3 起缺 KEY → **503 KEY_REQUIRED**；缺 ADMIN → **503 ADMIN_REQUIRED**  
 
 ## 本地打包
 
