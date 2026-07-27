@@ -1,7 +1,7 @@
 /**
  * edgetunnel-v3 — single-file Worker bundle
  * version: 3.0.3
- * built:   2026-07-27T11:25:56.326Z
+ * built:   2026-07-27T11:44:20.371Z
  * source:  https://github.com/Nohello-ai/edgetunnel-v3
  *
  * Built from modular src/ via: npm run build

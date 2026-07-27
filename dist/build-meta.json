@@ -1,8 +1,8 @@
 {
   "name": "edgetunnel-v3",
-  "version": "3.0.0",
-  "built": "2026-07-27T11:25:56.326Z",
-  "bytes": 329308,
-  "lines": 6879,
+  "version": "3.0.3",
+  "built": "2026-07-27T11:44:20.371Z",
+  "bytes": 329419,
+  "lines": 6881,
   "file": "dist/worker.js"
 }
