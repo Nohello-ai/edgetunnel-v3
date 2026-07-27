@@ -8,12 +8,13 @@ compatibility_flags = ["nodejs_compat"]
 binding = "KV"
 id = "your-kv-namespace-id"
 
-# 可选环境变量（按需配置，也可在 Cloudflare Dashboard 中设置）
+# 环境变量（也可在 Cloudflare Dashboard 中设置）
+# KEY 必填：随机字符串，长度 >= 16；未设置或使用旧默认文案时 Worker 返回 503
 [vars]
 # ADMIN = ""
 # UUID = ""
 # HOST = ""
-# KEY = ""
+# KEY = "replace-with-a-long-random-secret"
 # PROXYIP = ""
 # GO2SOCKS5 = ""
 # URL = ""

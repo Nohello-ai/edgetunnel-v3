@@ -2,7 +2,7 @@
  * 全局常量模块
  */
 
-export const Version = '2026-07-22 19:14:26';
+export const Version = '2026-07-27 18:55:00';
 
 export const Pages静态页面 = 'https://nohello-ai.github.io/edt-pages-pro';
 

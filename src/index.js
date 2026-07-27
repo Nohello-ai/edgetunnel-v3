@@ -46,7 +46,15 @@ export default {
 		const UA = request.headers.get('User-Agent') || 'null';
 		const upgradeHeader = (request.headers.get('Upgrade') || '').toLowerCase(), contentType = (request.headers.get('content-type') || '').toLowerCase();
 		const 管理员密码 = env.ADMIN || env.admin || env.PASSWORD || env.password || env.pswd || env.TOKEN || env.KEY || env.UUID || env.uuid;
-		const 加密秘钥 = env.KEY || '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改';
+		// KEY 必填：禁止使用可预测的默认密钥（见 CODE_REVIEW #1）
+		const 禁止使用的默认密钥 = '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改';
+		const 加密秘钥 = typeof env.KEY === 'string' ? env.KEY.trim() : '';
+		if (!加密秘钥 || 加密秘钥 === 禁止使用的默认密钥 || 加密秘钥.length < 16) {
+			return new Response(JSON.stringify({
+				error: 'KEY_REQUIRED',
+				message: '请设置环境变量 KEY：随机字符串，长度至少 16，且勿使用源码中的默认提示文案。未设置 KEY 时服务拒绝启动。',
+			}), { status: 503, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
+		}
 		const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 		const envUUID = env.UUID || env.uuid;
 		const { userID, userIDMD5 } = await 获取缓存身份(
@@ -114,7 +122,7 @@ export default {
 			if (!管理员密码) return fetch(Pages静态页面 + '/noADMIN').then(r => { const headers = new Headers(r.headers); headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); headers.set('Pragma', 'no-cache'); headers.set('Expires', '0'); return new Response(r.body, { status: 404, statusText: r.statusText, headers }) });
 			if (env.KV && typeof env.KV.get === 'function') {
 				const 区分大小写访问路径 = url.pathname.slice(1);
-				if (区分大小写访问路径 === 加密秘钥 && 加密秘钥 !== '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改') {//快速订阅
+				if (区分大小写访问路径 === 加密秘钥) {//快速订阅（路径等于 KEY）
 					const params = new URLSearchParams(url.search);
 					params.set('token', await MD5MD5(host + userID));
 					return new Response('重定向中...', { status: 302, headers: { 'Location': `/sub?${params.toString()}` } });
