@@ -13,7 +13,7 @@
 | 配置存储 | Workers KV（`KV` 绑定） |
 | 当前安全版本 | **v3.0.3**（运行时必填 **`ADMIN` + `KEY`**，见下方环境变量） |
 
-> 发版与粘贴部署见 [RELEASE.md](./RELEASE.md)。代码审查见 [CODE_REVIEW.md](./CODE_REVIEW.md)。
+> **开发**：改 `src/` 模块。**交付**：`npm run build` → `dist/worker.js` 单文件粘贴部署。发版说明见 [RELEASE.md](./RELEASE.md)。
 
 ---
 
@@ -307,36 +307,47 @@ GET /admin*
 
 - **v3.0.3+ 必须设置 `ADMIN` + `KEY`**，缺一则全站 503  
 - 登录 cookie 绑定 **User-Agent**，换浏览器/UA 需重新登录  
-- 审查报告中仍有：登录无限速、MD5 用于鉴权派生、入口函数过大等，见 [CODE_REVIEW.md](./CODE_REVIEW.md)
 
 ---
 
 ## 源码结构
 
+本仓库刻意保持两层：
+
+| 层 | 路径 | 用途 |
+|----|------|------|
+| 模块源码 | `src/**` | 日常改功能、修 bug |
+| 单文件产物 | `dist/worker.js` | Dashboard 粘贴部署；由构建生成 |
+| 打包脚本 | `scripts/build.mjs` | esbuild 把 `src/index.js` 打成单文件 |
+| CI | `.github/workflows/` | push 重建 dist；打 tag 发 Release |
+
 ```
 edgetunnel-v3/
-├── README.md              ← 本页（项目首页说明）
-├── RELEASE.md             ← 发版与粘贴部署
-├── CODE_REVIEW.md         ← 代码审查
-├── wrangler.toml          ← Worker 名、入口、KV、vars 注释
-├── package.json
-├── scripts/build.mjs      ← esbuild 打成单文件
-├── dist/worker.js         ← 可粘贴部署的打包产物
-└── src/
-    ├── index.js           ← 入口路由
-    ├── constants.js       ← 版本号、伪装页源、缓冲区参数
-    ├── state.js           ← isolate 内缓存状态
-    ├── config/            ← KV 配置加载、日志
-    ├── protocol/          ← VLESS / Trojan / SS
-    ├── transport/         ← WS / gRPC / XHTTP
-    ├── connector/         ← 各类出站
-    ├── stream/            ← 转发、队列、grain
-    ├── net/               ← 反代参数、DoH、优选、运营商
-    ├── subscription/      ← Clash / Sing-box / Surge
-    ├── pages/             ← 内置伪装 HTML
-    ├── routes/            ← 如 proxy-check
-    ├── tls/               ← TLS 客户端相关
-    └── utils/             ← 加密、base64、杂项
+├── README.md                 ← 本页
+├── RELEASE.md                ← 发版与粘贴部署
+├── package.json              ← npm scripts + esbuild
+├── wrangler.toml             ← 本地 dev / deploy（可选）
+├── scripts/build.mjs         ← 模块 → 单文件
+├── .github/workflows/
+│   ├── build-dist.yml        ← main 上改 src 自动重建 dist
+│   └── release.yml           ← tag 发布 worker.js
+├── dist/
+│   └── worker.js             ← 唯一交付物（粘贴用）
+└── src/                      ← 模块化开发
+    ├── index.js
+    ├── constants.js
+    ├── state.js
+    ├── config/
+    ├── protocol/
+    ├── transport/
+    ├── connector/
+    ├── stream/
+    ├── net/
+    ├── subscription/
+    ├── pages/
+    ├── routes/
+    ├── tls/
+    └── utils/
 ```
 
 ---
@@ -345,13 +356,14 @@ edgetunnel-v3/
 
 ```bash
 npm install
-npm run dev      # wrangler dev
-npm run build    # → dist/worker.js
-npm run deploy   # wrangler deploy
+npm run dev      # wrangler dev（模块入口 src/index.js）
+npm run build    # → dist/worker.js 单文件
+npm run deploy   # wrangler deploy（可选）
 npm run tail     # 实时日志
 ```
 
-部署前请在 `wrangler.toml` 填入真实 KV `id`，并配置 `KEY` / `ADMIN` 等。
+改完 `src/` 后务必 `npm run build`（或 push 到 `main` 让 CI 重建），再复制 `dist/worker.js` 部署。  
+部署前在 `wrangler.toml` 填真实 KV `id`，并配置 **`ADMIN` + `KEY`**（及推荐的 `UUID`）。
 
 ---
 

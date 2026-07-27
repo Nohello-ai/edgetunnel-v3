@@ -1,6 +1,7 @@
 # 版本发布说明
 
-每次发版会自动把 `src/` 模块打包成 **单个 `worker.js`**，方便复制粘贴到 Cloudflare Workers。
+仓库用 **模块化 `src/`** 开发，发版/CI 把入口打成 **单个 `dist/worker.js`**，供 Cloudflare Dashboard 粘贴部署。  
+日常只改 `src/`；用户侧只需下载/复制 `worker.js`。
 
 ## 方式一：打 Tag 自动发版（推荐）
 

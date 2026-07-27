@@ -1,11 +1,13 @@
 /**
  * edgetunnel-v3 — single-file Worker bundle
- * version: 3.0.0
+ * version: 3.0.3
  * built:   2026-07-27T11:25:56.326Z
  * source:  https://github.com/Nohello-ai/edgetunnel-v3
  *
- * Paste this entire file into Cloudflare Workers dashboard,
- * or deploy with: wrangler deploy --main dist/worker.js
+ * Built from modular src/ via: npm run build
+ * Deploy: paste this entire file into Cloudflare Workers → Edit code → Deploy.
+ * Required runtime vars: ADMIN (+ password aliases), KEY (length >= 16).
+ * Required binding: KV.
  */
 
 

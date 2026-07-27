@@ -54,7 +54,7 @@ export default {
 				message: '请设置环境变量 ADMIN（或 PASSWORD / TOKEN 等密码类变量）作为管理面板登录口令。不可再用 KEY/UUID 顶替。',
 			}), { status: 503, headers: { 'Content-Type': 'application/json;charset=utf-8', 'Cache-Control': 'no-store' } });
 		}
-		// KEY 必填：禁止使用可预测的默认密钥（见 CODE_REVIEW #1）
+		// KEY 必填：禁止使用可预测的默认密钥
 		const 禁止使用的默认密钥 = '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改';
 		const 加密秘钥 = typeof env.KEY === 'string' ? env.KEY.trim() : '';
 		if (!加密秘钥 || 加密秘钥 === 禁止使用的默认密钥 || 加密秘钥.length < 16) {
