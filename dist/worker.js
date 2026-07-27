@@ -1,7 +1,7 @@
 /**
  * edgetunnel-v3 — single-file Worker bundle
  * version: 3.0.0
- * built:   2026-07-25T17:26:38.720Z
+ * built:   2026-07-27T11:25:56.326Z
  * source:  https://github.com/Nohello-ai/edgetunnel-v3
  *
  * Paste this entire file into Cloudflare Workers dashboard,
