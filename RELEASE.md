@@ -47,5 +47,7 @@ https://github.com/Nohello-ai/edgetunnel-v3/releases
 ```bash
 npm install
 npm run build
-# 产物：dist/worker.js
+# 产物：dist/worker.js（esbuild minify，已去掉全部 JS 注释）
 ```
+
+构建选项：`scripts/build.mjs` 使用 `minify: true` + `legalComments: "none"`，单文件无 banner/路径注释；体积与元数据见 `dist/build-meta.json`。
