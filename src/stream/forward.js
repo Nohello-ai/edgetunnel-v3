@@ -268,42 +268,77 @@ export async function forwardataTCP(host, portNum, rawData, ws, respHeader, remo
 	}
 }
 
-export async function forwardataudp(udpChunk, webSocket, respHeader, request, 响应封装器 = null) {
+export async function 读取单条DNSoverTCP响应(reader) {
+	const header = new Uint8Array(2);
+	let headerLength = 0;
+	let response = null;
+	let responseLength = 0;
+	while (true) {
+		const { done, value } = await reader.read();
+		if (done || !value) throw new Error('DNS over TCP response is truncated');
+		const chunk = 数据转Uint8Array(value);
+		let offset = 0;
+		if (headerLength < 2) {
+			const count = Math.min(2 - headerLength, chunk.byteLength);
+			header.set(chunk.subarray(0, count), headerLength);
+			headerLength += count;
+			offset += count;
+			if (headerLength < 2) continue;
+			const payloadLength = (header[0] << 8) | header[1];
+			if (payloadLength === 0) throw new Error('DNS over TCP response has empty payload');
+			response = new Uint8Array(2 + payloadLength);
+			response.set(header, 0);
+			responseLength = 2;
+		}
+		const count = Math.min(response.byteLength - responseLength, chunk.byteLength - offset);
+		if (count > 0) {
+			response.set(chunk.subarray(offset, offset + count), responseLength);
+			responseLength += count;
+		}
+		if (responseLength === response.byteLength) return response;
+	}
+}
+
+export async function forwardataudp(udpChunk, webSocket, respHeader, request, 响应封装器 = null, TCP连接覆盖 = null) {
 	const 请求数据 = 数据转Uint8Array(udpChunk);
 	const 请求字节数 = 请求数据.byteLength;
 	log(`[UDP转发] 收到 DNS 请求: ${请求字节数}B -> 8.8.4.4:53`);
+	let tcpSocket = null;
+	let writer = null;
+	let reader = null;
 	try {
-		const TCP连接 = 创建请求TCP连接器(request);
-		const tcpSocket = TCP连接({ hostname: '8.8.4.4', port: 53 });
+		const TCP连接 = TCP连接覆盖 || 创建请求TCP连接器(request);
+		tcpSocket = TCP连接({ hostname: '8.8.4.4', port: 53 });
 		let 魏烈思Header = respHeader;
-		const writer = tcpSocket.writable.getWriter();
+		writer = tcpSocket.writable.getWriter();
 		await writer.write(请求数据);
 		log(`[UDP转发] DNS 请求已写入上游: ${请求字节数}B`);
 		writer.releaseLock();
-		await tcpSocket.readable.pipeTo(new WritableStream({
-			async write(chunk) {
-				const 原始响应 = 数据转Uint8Array(chunk);
-				log(`[UDP转发] 收到 DNS 响应: ${原始响应.byteLength}B`);
-				const 封装结果 = 响应封装器 ? await 响应封装器(原始响应) : 原始响应;
-				const 发送片段列表 = Array.isArray(封装结果) ? 封装结果 : [封装结果];
-				if (!发送片段列表.length) return;
-				if (webSocket.readyState !== WebSocket.OPEN) return;
-				for (const fragment of 发送片段列表) {
-					const 转发响应 = 数据转Uint8Array(fragment);
-					if (!转发响应.byteLength) continue;
-					if (魏烈思Header) {
-						const response = new Uint8Array(魏烈思Header.length + 转发响应.byteLength);
-						response.set(魏烈思Header, 0);
-						response.set(转发响应, 魏烈思Header.length);
-						await WebSocket发送并等待(webSocket, response.buffer);
-						魏烈思Header = null;
-					} else {
-						await WebSocket发送并等待(webSocket, 转发响应);
-					}
-				}
-			},
-		}));
+		writer = null;
+		reader = tcpSocket.readable.getReader();
+		const 原始响应 = await 读取单条DNSoverTCP响应(reader);
+		log(`[UDP转发] 收到完整 DNS 响应: ${原始响应.byteLength}B`);
+		const 封装结果 = 响应封装器 ? await 响应封装器(原始响应) : 原始响应;
+		const 发送片段列表 = Array.isArray(封装结果) ? 封装结果 : [封装结果];
+		if (!发送片段列表.length || webSocket.readyState !== WebSocket.OPEN) return;
+		for (const fragment of 发送片段列表) {
+			const 转发响应 = 数据转Uint8Array(fragment);
+			if (!转发响应.byteLength) continue;
+			if (魏烈思Header) {
+				const response = new Uint8Array(魏烈思Header.length + 转发响应.byteLength);
+				response.set(魏烈思Header, 0);
+				response.set(转发响应, 魏烈思Header.length);
+				await WebSocket发送并等待(webSocket, response.buffer);
+				魏烈思Header = null;
+			} else {
+				await WebSocket发送并等待(webSocket, 转发响应);
+			}
+		}
 	} catch (error) {
 		log(`[UDP转发] DNS 转发失败: ${error?.message || error}`);
+	} finally {
+		try { writer?.releaseLock() } catch (e) { }
+		try { reader?.releaseLock() } catch (e) { }
+		try { await Promise.resolve(tcpSocket?.close?.()) } catch (e) { }
 	}
 }
