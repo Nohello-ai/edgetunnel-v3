@@ -20,6 +20,7 @@ import { 整理成数组, 替换星号为随机字符, 随机路径 } from './ut
 import { 识别运营商 } from './net/operator.js';
 import { 生成随机IP, 获取优选订阅生成器数据, 请求优选API } from './net/resolver.js';
 import { 反代参数获取, 获取传输协议配置, 获取传输路径参数值, 获取SOCKS5账号, 获取代理默认端口 } from './net/proxy.js';
+import { 安全解码URIComponent, 解析端口 } from './net/address.js';
 import { 读取config_JSON } from './config/loader.js';
 import { 规范化持久化配置, 格式化配置错误 } from './config/schema.js';
 import { 请求日志记录 } from './config/logging.js';
@@ -174,7 +175,7 @@ export default {
 								new URL(待验证优选URL);
 								const 请求优选API内容 = await 请求优选API([待验证优选URL], url.searchParams.get('port') || '443');
 								let 优选API的IP = 请求优选API内容[0].length > 0 ? 请求优选API内容[0] : 请求优选API内容[1];
-								优选API的IP = 优选API的IP.map(item => item.replace(/#(.+)$/, (_, remark) => '#' + decodeURIComponent(remark)));
+								优选API的IP = 优选API的IP.map(item => item.replace(/#(.+)$/, (_, remark) => '#' + 安全解码URIComponent(remark)));
 								return new Response(JSON.stringify({ success: true, data: 优选API的IP }, null, 2), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 							} catch (err) {
 								const errorResponse = { msg: '验证优选API失败，失败原因：' + err.message, error: err.message };
@@ -363,7 +364,7 @@ export default {
 										} else if (地址部分.toLowerCase().includes('://')) {
 											if (元素.includes('#')) {
 												const 地址备注分离 = 元素.split('#');
-												其他节点.push(地址备注分离[0] + '#' + encodeURIComponent(decodeURIComponent(地址备注分离[1])));
+												其他节点.push(地址备注分离[0] + '#' + encodeURIComponent(安全解码URIComponent(地址备注分离[1])));
 											} else 其他节点.push(元素);
 										} else {
 											if (地址部分.includes('*')) {
@@ -400,7 +401,11 @@ export default {
 
 								if (match) {
 									节点地址 = match[1];  // IP地址或域名(可能带方括号)
-									节点端口 = match[2] ? match[2] : '443';  // 端口默认443，SS noTLS在生成链接时再映射
+									try { 节点端口 = String(解析端口(match[2] || '443')) }
+									catch {
+										console.warn(`[订阅内容] 非法端口已忽略: ${原始地址}`);
+										return null;
+									}
 									节点备注 = match[3] || 节点地址;  // 备注,默认为地址本身
 								} else {
 									// 不规范的格式，跳过处理返回null

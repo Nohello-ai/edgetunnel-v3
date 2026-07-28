@@ -4,28 +4,27 @@
 import { 整理成数组 } from '../utils/misc.js';
 import { DoH查询 } from './doh.js';
 import { log } from '../utils/log.js';
+import { 解析主机端口, 解析端口 } from './address.js';
+
+export function 解析地址端口字符串(str, 默认端口 = 443) {
+	const { hostname, port } = 解析主机端口(str, 默认端口);
+	return [hostname, port];
+}
 
 export async function 解析地址端口(proxyIP, 目标域名 = 'dash.cloudflare.com', UUID = '00000000-0000-4000-8000-000000000000') {
 	proxyIP = proxyIP.toLowerCase();
-	function 解析地址端口字符串(str) {
-		let 地址 = str, 端口 = 443;
-		if (str.includes(']:')) {
-			const parts = str.split(']:');
-			地址 = parts[0] + ']';
-			端口 = parseInt(parts[1], 10) || 端口;
-		} else if ((str.match(/:/g) || []).length === 1 && !str.startsWith('[')) {
-			const colonIndex = str.lastIndexOf(':');
-			地址 = str.slice(0, colonIndex);
-			端口 = parseInt(str.slice(colonIndex + 1), 10) || 端口;
-		}
-		return [地址, 端口];
-	}
 
 	function 解析TXT反代记录(txtData) {
 		return txtData.flatMap(data => {
 			if (data.startsWith('"') && data.endsWith('"')) data = data.slice(1, -1);
 			return data.replace(/\\010/g, ',').replace(/\n/g, ',').split(',').map(s => s.trim()).filter(Boolean);
-		}).map(prefix => 解析地址端口字符串(prefix));
+		}).flatMap(prefix => {
+			try { return [解析地址端口字符串(prefix)] }
+			catch (error) {
+				log(`[反代解析] 忽略无效 TXT 地址 ${prefix}: ${error.message}`);
+				return [];
+			}
+		});
 	}
 
 	const 反代IP数组 = await 整理成数组(proxyIP);
@@ -38,8 +37,8 @@ export async function 解析地址端口(proxyIP, 目标域名 = 'dash.cloudflar
 		let [地址, 端口] = 解析地址端口字符串(singleProxyIP);
 
 		if (singleProxyIP.includes('.tp')) {
-			const tpMatch = singleProxyIP.match(/\.tp(\d+)/);
-			if (tpMatch) 端口 = parseInt(tpMatch[1], 10);
+			const tpMatch = singleProxyIP.match(/\.tp(\d+)$/);
+			if (tpMatch) 端口 = 解析端口(tpMatch[1], 'TP 端口');
 		}
 
 		// 判断是否是域名（非IP地址）

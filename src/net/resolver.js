@@ -4,6 +4,7 @@
 import { 识别运营商 } from './operator.js';
 import { 整理成数组 } from '../utils/misc.js';
 import { 特征码字典 } from '../constants.js';
+import { 安全解码URIComponent } from './address.js';
 
 export async function 生成随机IP(request, count = 16, 指定端口 = -1) {
 	const url = new URL(request.url);
@@ -75,7 +76,7 @@ export async function 获取优选订阅生成器数据(优选订阅生成器HOS
 				if (地址匹配) {
 					let 地址端口 = 地址匹配[1], 备注 = ''; // 域名:端口 或 IP:端口
 					const 备注匹配 = 行内容.match(/#(.+)$/);
-					if (备注匹配) 备注 = '#' + decodeURIComponent(备注匹配[1]);
+					if (备注匹配) 备注 = '#' + 安全解码URIComponent(备注匹配[1]);
 					优选IP.push(地址端口 + 备注);
 				}
 			} else {
@@ -97,7 +98,7 @@ export async function 请求优选API(urls, 默认端口 = '443', 超时时间 =
 		// 检查URL是否包含备注名
 		const hashIndex = url.indexOf('#');
 		const urlWithoutHash = hashIndex > -1 ? url.substring(0, hashIndex) : url;
-		const API备注名 = hashIndex > -1 ? decodeURIComponent(url.substring(hashIndex + 1)) : null;
+		const API备注名 = hashIndex > -1 ? 安全解码URIComponent(url.substring(hashIndex + 1)) : null;
 		const 优选IP作为反代IP = url.toLowerCase().includes('proxyip=true');
 		if (urlWithoutHash.toLowerCase().startsWith('sub://')) {
 			try {

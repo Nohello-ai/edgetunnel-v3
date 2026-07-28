@@ -4,6 +4,7 @@
 import { 随机路径 } from '../utils/misc.js';
 import { base64SecretDecode } from '../utils/base64.js';
 import { 解析木马反代地址 } from '../protocol/trojan.js';
+import { 安全解码URIComponent, 解析主机端口, 解析端口 } from './address.js';
 
 export function 获取传输协议配置(配置 = {}) {
 	const 是gRPC = 配置.传输协议 === 'grpc';
@@ -22,7 +23,7 @@ export function 获取传输路径参数值(配置 = {}, 节点路径 = '/', 作
 
 export async function 反代参数获取(url, uuid, 默认反代IP = '', 默认反代兜底 = true) {
 	const { searchParams } = url;
-	const pathname = decodeURIComponent(url.pathname);
+	const pathname = 安全解码URIComponent(url.pathname);
 	const pathLower = pathname.toLowerCase();
 	let 反代IP = 默认反代IP, 启用SOCKS5反代 = null, 启用SOCKS5全局反代 = false, 我的SOCKS5账号 = '', parsedSocks5Address = {}, 启用反代兜底 = 默认反代兜底;
 	const 反代上下文 = { 木马反代地址: null, 反代IP, 代理类型: null, 代理账号: '', 代理全局: false, 代理参数: {}, 反代兜底: 启用反代兜底 };
@@ -42,6 +43,8 @@ export async function 反代参数获取(url, uuid, 默认反代IP = '', 默认�
 			const { type, ...链式代理地址 } = JSON.parse(链式代理明文);
 			if (!type || !反代协议默认端口[String(type).toLowerCase()]) throw new Error('链式代理类型无效');
 			if (!链式代理地址.hostname || !链式代理地址.port) throw new Error('链式代理地址缺少 hostname 或 port');
+			const 链式代理端口 = 解析端口(链式代理地址.port, '链式代理端口');
+			const { hostname: 链式代理主机 } = 解析主机端口(链式代理地址.hostname, 链式代理端口);
 			我的SOCKS5账号 = '';
 			反代IP = '链式代理';
 			启用反代兜底 = false;
@@ -50,10 +53,9 @@ export async function 反代参数获取(url, uuid, 默认反代IP = '', 默认�
 			parsedSocks5Address = {
 				username: 链式代理地址.username,
 				password: 链式代理地址.password,
-				hostname: 链式代理地址.hostname,
-				port: Number(链式代理地址.port)
+				hostname: 链式代理主机,
+				port: 链式代理端口
 			};
-			if (isNaN(parsedSocks5Address.port)) throw new Error('链式代理端口无效');
 			保存快照();
 			return 反代上下文;
 		} catch (err) {
@@ -166,7 +168,7 @@ export function 获取SOCKS5账号(address, 默认端口 = 80) {
 	address = String(address || '').trim().replace(/^(socks5|http|https|turn|sstp):\/\//i, '').split('#')[0].trim();
 	const firstAt = address.lastIndexOf("@");
 	if (firstAt !== -1) {
-		let auth = address.slice(0, firstAt).replaceAll("%3D", "=");
+		let auth = address.slice(0, firstAt).replace(/%3D/ig, '=');
 		if (!auth.includes(":") && SOCKS5账号Base64正则.test(auth)) auth = atob(auth);
 		address = `${auth}@${address.slice(firstAt + 1)}`;
 	}
@@ -174,23 +176,13 @@ export function 获取SOCKS5账号(address, 默认端口 = 80) {
 	const atIndex = address.lastIndexOf("@");
 	const hostPart = (atIndex === -1 ? address : address.slice(atIndex + 1)).split('/')[0];
 	const authPart = atIndex === -1 ? "" : address.slice(0, atIndex);
-	const [username, password] = authPart ? authPart.split(":") : [];
-	if (authPart && !password) throw new Error('无效的 SOCKS 地址格式：认证部分必须是 "username:password" 的形式');
+	const authSeparator = authPart.indexOf(':');
+	const username = authSeparator === -1 ? undefined : 安全解码URIComponent(authPart.slice(0, authSeparator));
+	const password = authSeparator === -1 ? undefined : 安全解码URIComponent(authPart.slice(authSeparator + 1));
+	if (authPart && (authSeparator < 1 || !password)) throw new Error('无效的 SOCKS 地址格式：认证部分必须是 "username:password" 的形式');
 
-	let hostname = hostPart, port = 默认端口;
-	if (hostPart.includes("]:")) {
-		const [ipv6Host, ipv6Port = ""] = hostPart.split("]:");
-		hostname = ipv6Host + "]";
-		port = Number(ipv6Port.replace(/[^\d]/g, ""));
-	} else if (!hostPart.startsWith("[")) {
-		const parts = hostPart.split(":");
-		if (parts.length === 2) {
-			hostname = parts[0];
-			port = Number(parts[1].replace(/[^\d]/g, ""));
-		}
-	}
-
-	if (isNaN(port)) throw new Error('无效的 SOCKS 地址格式：端口号必须是数字');
-	if (hostname.includes(":") && !IPv6方括号正则.test(hostname)) throw new Error('无效的 SOCKS 地址格式：IPv6 地址必须用方括号括起来，如 [2001:db8::1]');
+	let hostname, port;
+	try { ({ hostname, port } = 解析主机端口(hostPart, 默认端口)) }
+	catch (error) { throw new Error(`无效的 SOCKS 地址格式：${error.message}`) }
 	return { username, password, hostname, port };
 }
