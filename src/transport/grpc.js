@@ -6,7 +6,67 @@ import { 创建上行写入队列 } from '../stream/queue.js';
 import { forwardataTCP, forwardataudp } from '../stream/forward.js';
 import { 解析魏烈思请求 } from '../protocol/vless.js';
 import { 解析木马请求, 转发木马UDP数据 } from '../protocol/trojan.js';
-import { 下行Grain包字节, 下行Grain静默毫秒 } from '../constants.js';
+import { 下行Grain包字节, 下行Grain静默毫秒, GRPC入站帧最大载荷字节, GRPC入站缓存最大字节, GRPC单块最大帧数 } from '../constants.js';
+
+/**
+ * 创建固定容量的 gRPC 入站解析状态，避免分片输入反复复制累计缓存。
+ */
+export function 创建GRPC入站解析状态() {
+	return {
+		header: new Uint8Array(5),
+		headerLength: 0,
+		payload: null,
+		payloadLength: 0,
+	};
+}
+
+/** 提取当前块中的完整 gRPC 帧；每个输入字节最多复制一次。 */
+export function 解析GRPC入站块(state, chunk) {
+	if (!state || !(state.header instanceof Uint8Array) || state.header.byteLength !== 5) {
+		throw new Error('Invalid gRPC parser state');
+	}
+	const 当前块 = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk || 0);
+	const frames = [];
+	let offset = 0;
+	while (offset < 当前块.byteLength) {
+		if (state.headerLength < 5) {
+			const count = Math.min(5 - state.headerLength, 当前块.byteLength - offset);
+			state.header.set(当前块.subarray(offset, offset + count), state.headerLength);
+			state.headerLength += count;
+			offset += count;
+			if (state.headerLength < 5) break;
+			if (state.header[0] !== 0) throw new Error('gRPC compression is not supported');
+			const grpcLen = new DataView(state.header.buffer, state.header.byteOffset, 5).getUint32(1);
+			if (grpcLen > GRPC入站帧最大载荷字节) throw new Error('gRPC frame is too large');
+			if (grpcLen + 5 > GRPC入站缓存最大字节) throw new Error('gRPC inbound buffer is too large');
+			if (grpcLen === 0) {
+				frames.push(new Uint8Array(0));
+				state.headerLength = 0;
+				if (frames.length > GRPC单块最大帧数) throw new Error('Too many gRPC frames in one chunk');
+				continue;
+			}
+			state.payload = new Uint8Array(grpcLen);
+			state.payloadLength = 0;
+		}
+
+		const count = Math.min(state.payload.byteLength - state.payloadLength, 当前块.byteLength - offset);
+		state.payload.set(当前块.subarray(offset, offset + count), state.payloadLength);
+		state.payloadLength += count;
+		offset += count;
+		if (state.payloadLength === state.payload.byteLength) {
+			frames.push(state.payload);
+			state.payload = null;
+			state.payloadLength = 0;
+			state.headerLength = 0;
+			if (frames.length > GRPC单块最大帧数) throw new Error('Too many gRPC frames in one chunk');
+		}
+	}
+	return frames;
+}
+
+export function 完成GRPC入站解析(state) {
+	if (state.headerLength !== 0 || state.payload !== null) throw new Error('Truncated gRPC frame');
+}
 
 export async function 处理gRPC请求(request, yourUUID, 反代上下文 = {}) {
 	if (!request.body) return new Response('Bad Request', { status: 400 });
@@ -161,22 +221,15 @@ export async function 处理gRPC请求(request, yourUUID, 反代上下文 = {}) 
 
 			let 转发失败 = false;
 			try {
-				let pending = new Uint8Array(0);
+				const grpc解析状态 = 创建GRPC入站解析状态();
 				while (true) {
 					const { done, value } = await reader.read();
-					if (done) break;
+					if (done) {
+						完成GRPC入站解析(grpc解析状态);
+						break;
+					}
 					if (!value || value.byteLength === 0) continue;
-					const 当前块 = value instanceof Uint8Array ? value : new Uint8Array(value);
-					const merged = new Uint8Array(pending.length + 当前块.length);
-					merged.set(pending, 0);
-					merged.set(当前块, pending.length);
-					pending = merged;
-					while (pending.byteLength >= 5) {
-						const grpcLen = ((pending[1] << 24) >>> 0) | (pending[2] << 16) | (pending[3] << 8) | pending[4];
-						const frameSize = 5 + grpcLen;
-						if (pending.byteLength < frameSize) break;
-						const grpcPayload = pending.subarray(5, frameSize);
-						pending = pending.slice(frameSize);
+					for (const grpcPayload of 解析GRPC入站块(grpc解析状态, value)) {
 						if (!grpcPayload.byteLength) continue;
 						let payload = grpcPayload;
 						if (payload.byteLength >= 2 && payload[0] === 0x0a) {

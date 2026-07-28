@@ -10,6 +10,11 @@ export const Pages静态页面 = 'https://edt-pages.github.io';
 export const WS早期数据最大字节 = 8 * 1024;
 export const WS早期数据最大头长度 = Math.ceil(WS早期数据最大字节 * 4 / 3) + 4;
 
+// gRPC 入站 framing 参数
+export const GRPC入站帧最大载荷字节 = 1024 * 1024;
+export const GRPC入站缓存最大字节 = 5 + GRPC入站帧最大载荷字节;
+export const GRPC单块最大帧数 = 1024;
+
 // 上行队列参数
 export const 上行合包目标字节 = 16 * 1024;
 export const 上行队列最大字节 = 16 * 1024 * 1024;
