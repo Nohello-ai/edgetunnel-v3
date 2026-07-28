@@ -21,6 +21,7 @@ import { 识别运营商 } from './net/operator.js';
 import { 生成随机IP, 获取优选订阅生成器数据, 请求优选API } from './net/resolver.js';
 import { 反代参数获取, 获取传输协议配置, 获取传输路径参数值, 获取SOCKS5账号, 获取代理默认端口 } from './net/proxy.js';
 import { 读取config_JSON } from './config/loader.js';
+import { 规范化持久化配置, 格式化配置错误 } from './config/schema.js';
 import { 请求日志记录 } from './config/logging.js';
 import { getCloudflareUsage } from './utils/cloudflare.js';
 import { Clash订阅配置文件热补丁 } from './subscription/clash.js';
@@ -201,11 +202,16 @@ export default {
 						if (访问路径 === 'admin/config.json') { // 保存config.json配置
 							try {
 								const newConfig = await request.json();
-								// 验证配置完整性
-								if (!newConfig.UUID || !newConfig.HOST) return new Response(JSON.stringify({ error: '配置不完整' }), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+								const 配置校验结果 = 规范化持久化配置(newConfig, config_JSON, 特征码字典[0]);
+								if (!配置校验结果.success) {
+									return new Response(JSON.stringify({
+										error: '配置格式无效',
+										details: 格式化配置错误(配置校验结果.error),
+									}, null, 2), { status: 400, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+								}
 
 								// 保存到 KV
-								await env.KV.put('config.json', JSON.stringify(newConfig, null, 2));
+								await env.KV.put('config.json', JSON.stringify(配置校验结果.data, null, 2));
 								ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Save_Config', config_JSON));
 								return new Response(JSON.stringify({ success: true, message: '配置已保存' }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
 							} catch (error) {

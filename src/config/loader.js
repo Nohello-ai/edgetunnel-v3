@@ -7,6 +7,7 @@ import { getCloudflareUsage } from '../utils/cloudflare.js';
 import { 获取传输协议配置, 获取传输路径参数值 } from '../net/proxy.js';
 import { 整理成数组, 掩码敏感信息 } from '../utils/misc.js';
 import { getSOCKS5白名单 } from '../state.js';
+import { 安全规范化配置, 格式化配置错误 } from './schema.js';
 
 export async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0", 重置配置 = false) {
 	let config_JSON;
@@ -121,6 +122,14 @@ export async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0
 		}
 	} catch (error) {
 		console.error(`读取config_JSON出错: ${error.message}`);
+		config_JSON = 默认配置JSON;
+	}
+
+	const 配置校验结果 = 安全规范化配置(config_JSON, 默认配置JSON, _p);
+	if (配置校验结果.success) {
+		config_JSON = 配置校验结果.data;
+	} else {
+		console.error('config.json 配置校验失败，已回退到默认配置:', JSON.stringify(格式化配置错误(配置校验结果.error)));
 		config_JSON = 默认配置JSON;
 	}
 
