@@ -15,6 +15,11 @@ export const GRPC入站帧最大载荷字节 = 1024 * 1024;
 export const GRPC入站缓存最大字节 = 5 + GRPC入站帧最大载荷字节;
 export const GRPC单块最大帧数 = 1024;
 
+// Shadowsocks AEAD 入站 framing 参数
+export const SS入站缓存最大字节 = 1024 * 1024;
+export const SS单块最大记录数 = 1024;
+export const SS主密钥缓存最大条目 = 256;
+
 // 上行队列参数
 export const 上行合包目标字节 = 16 * 1024;
 export const 上行队列最大字节 = 16 * 1024 * 1024;

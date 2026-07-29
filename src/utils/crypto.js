@@ -14,6 +14,59 @@ function 字节转十六进制(bytes) {
 	return hex;
 }
 
+const MD5移位 = [
+	7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+	5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+	4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+	6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21,
+];
+const MD5常量 = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000) >>> 0);
+
+/**
+ * MD5 字节摘要（WebCrypto 与 Workers 均不提供 MD5）
+ * @param {ArrayBuffer|ArrayBufferView} input
+ * @returns {Uint8Array}
+ */
+export function MD5字节(input) {
+	const bytes = input instanceof ArrayBuffer
+		? new Uint8Array(input)
+		: new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
+	const paddedLength = Math.ceil((bytes.byteLength + 9) / 64) * 64;
+	const padded = new Uint8Array(paddedLength);
+	padded.set(bytes);
+	padded[bytes.byteLength] = 0x80;
+	const bitLength = BigInt(bytes.byteLength) * 8n;
+	for (let i = 0; i < 8; i++) padded[paddedLength - 8 + i] = Number((bitLength >> BigInt(i * 8)) & 0xffn);
+
+	let h0 = 0x67452301, h1 = 0xefcdab89, h2 = 0x98badcfe, h3 = 0x10325476;
+	const words = new Uint32Array(16);
+	for (let offset = 0; offset < paddedLength; offset += 64) {
+		for (let i = 0; i < 16; i++) {
+			const p = offset + i * 4;
+			words[i] = (padded[p] | (padded[p + 1] << 8) | (padded[p + 2] << 16) | (padded[p + 3] << 24)) >>> 0;
+		}
+		let a = h0, b = h1, c = h2, d = h3;
+		for (let i = 0; i < 64; i++) {
+			let f, g;
+			if (i < 16) { f = (b & c) | (~b & d); g = i }
+			else if (i < 32) { f = (d & b) | (~d & c); g = (5 * i + 1) % 16 }
+			else if (i < 48) { f = b ^ c ^ d; g = (3 * i + 5) % 16 }
+			else { f = c ^ (b | ~d); g = (7 * i) % 16 }
+			const sum = (a + f + MD5常量[i] + words[g]) >>> 0;
+			const rotated = ((sum << MD5移位[i]) | (sum >>> (32 - MD5移位[i]))) >>> 0;
+			const nextD = c;
+			a = d; d = nextD; c = b; b = (b + rotated) >>> 0;
+		}
+		h0 = (h0 + a) >>> 0; h1 = (h1 + b) >>> 0; h2 = (h2 + c) >>> 0; h3 = (h3 + d) >>> 0;
+	}
+
+	const digest = new Uint8Array(16);
+	for (const [wordIndex, word] of [h0, h1, h2, h3].entries()) {
+		for (let byteIndex = 0; byteIndex < 4; byteIndex++) digest[wordIndex * 4 + byteIndex] = (word >>> (byteIndex * 8)) & 0xff;
+	}
+	return digest;
+}
+
 /**
  * 双重 MD5 哈希（isolate 内按输入文本缓存，避免热路径重复计算）
  * @param {string} 文本
@@ -25,9 +78,9 @@ export async function MD5MD5(文本) {
 	if (命中) return 命中;
 
 	const 任务 = (async () => {
-		const 第一次哈希 = new Uint8Array(await crypto.subtle.digest('MD5', 文本编码器.encode(键)));
+		const 第一次哈希 = MD5字节(文本编码器.encode(键));
 		const 第一次十六进制 = 字节转十六进制(第一次哈希);
-		const 第二次哈希 = new Uint8Array(await crypto.subtle.digest('MD5', 文本编码器.encode(第一次十六进制.slice(7, 27))));
+		const 第二次哈希 = MD5字节(文本编码器.encode(第一次十六进制.slice(7, 27)));
 		return 字节转十六进制(第二次哈希);
 	})();
 

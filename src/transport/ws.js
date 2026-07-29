@@ -4,7 +4,7 @@ import { sha224 } from '../utils/crypto.js';
 import { WS早期数据最大字节, WS早期数据最大头长度, 上行队列最大字节, 上行队列最大条目 } from '../constants.js';
 import { VLESS文本解码器, UUID字节匹配, 解析魏烈思请求 } from '../protocol/vless.js';
 import { 解析木马请求, 转发木马UDP数据 } from '../protocol/trojan.js';
-import { SS支持加密配置, SSAEAD标签长度, SSNonce长度, SS派生主密钥, SS派生会话密钥, SSAEAD加密, SSAEAD解密, SS递增Nonce计数器, SS文本解码器 } from '../protocol/shadowsocks.js';
+import { SS支持加密配置, SSNonce长度, SS派生主密钥, SS派生会话密钥, SSAEAD加密, 创建SSAEAD入站解密器, 解析SS目标地址 } from '../protocol/shadowsocks.js';
 import { closeSocketQuietly, WebSocket发送并等待, 构造WS本地204响应 } from '../stream/utils.js';
 import { 创建上行写入队列 } from '../stream/queue.js';
 import { forwardataTCP, forwardataudp } from '../stream/forward.js';
@@ -158,95 +158,13 @@ export async function 处理WS请求(request, yourUUID, url, 反代上下文 = {
 			ss初始化任务 = (async () => {
 				const 请求加密方式 = (url.searchParams.get('enc') || '').toLowerCase();
 				const 首选加密配置 = SS支持加密配置[请求加密方式] || SS支持加密配置['aes-128-gcm'];
-				const 入站候选加密配置 = [首选加密配置, ...Object.values(SS支持加密配置).filter(c => c.method !== 首选加密配置.method)];
-				const 入站主密钥任务缓存 = new Map();
-				const 取入站主密钥任务 = (config) => {
-					if (!入站主密钥任务缓存.has(config.method)) 入站主密钥任务缓存.set(config.method, SS派生主密钥(yourUUID, config.keyLen));
-					return 入站主密钥任务缓存.get(config.method);
-				};
-				const 入站状态 = {
-					buffer: new Uint8Array(0),
-					hasSalt: false,
-					waitPayloadLength: null,
-					decryptKey: null,
-					nonceCounter: new Uint8Array(SSNonce长度),
-					加密配置: null,
-				};
-				const 初始化入站解密状态 = async () => {
-					const lengthCipherTotalLength = 2 + SSAEAD标签长度;
-					const 最大盐长度 = Math.max(...入站候选加密配置.map(c => c.saltLen));
-					const 最大对齐扫描字节 = 16;
-					const 可扫描最大偏移 = Math.min(最大对齐扫描字节, Math.max(0, 入站状态.buffer.byteLength - (lengthCipherTotalLength + Math.min(...入站候选加密配置.map(c => c.saltLen)))));
-					for (let offset = 0; offset <= 可扫描最大偏移; offset++) {
-						for (const 加密配置 of 入站候选加密配置) {
-							const 初始化最小长度 = offset + 加密配置.saltLen + lengthCipherTotalLength;
-							if (入站状态.buffer.byteLength < 初始化最小长度) continue;
-							const salt = 入站状态.buffer.subarray(offset, offset + 加密配置.saltLen);
-							const lengthCipher = 入站状态.buffer.subarray(offset + 加密配置.saltLen, 初始化最小长度);
-							const masterKey = await 取入站主密钥任务(加密配置);
-							const decryptKey = await SS派生会话密钥(加密配置, masterKey, salt, ['decrypt']);
-							const nonceCounter = new Uint8Array(SSNonce长度);
-							try {
-								const lengthPlain = await SSAEAD解密(decryptKey, nonceCounter, lengthCipher);
-								if (lengthPlain.byteLength !== 2) continue;
-								const payloadLength = (lengthPlain[0] << 8) | lengthPlain[1];
-								if (payloadLength < 0 || payloadLength > 加密配置.maxChunk) continue;
-								if (offset > 0) log(`[SS入站] 检测到前导噪声 ${offset}B，已自动对齐`);
-								if (加密配置.method !== 首选加密配置.method) log(`[SS入站] URL enc=${请求加密方式 || 首选加密配置.method} 与实际 ${加密配置.method} 不一致，已自动切换`);
-								入站状态.buffer = 入站状态.buffer.subarray(初始化最小长度);
-								入站状态.decryptKey = decryptKey;
-								入站状态.nonceCounter = nonceCounter;
-								入站状态.waitPayloadLength = payloadLength;
-								入站状态.加密配置 = 加密配置;
-								入站状态.hasSalt = true;
-								return true;
-							} catch (_) { }
-						}
-					}
-					const 初始化失败判定长度 = 最大盐长度 + lengthCipherTotalLength + 最大对齐扫描字节;
-					if (入站状态.buffer.byteLength >= 初始化失败判定长度) {
-						throw new Error(`SS handshake decrypt failed (enc=${请求加密方式 || 'auto'}, candidates=${入站候选加密配置.map(c => c.method).join('/')})`);
-					}
-					return false;
-				};
-				const 入站解密器 = {
-					async 输入(dataChunk) {
-						const chunk = 数据转Uint8Array(dataChunk);
-						if (chunk.byteLength > 0) 入站状态.buffer = 拼接字节数据(入站状态.buffer, chunk);
-						if (!入站状态.hasSalt) {
-							const 初始化成功 = await 初始化入站解密状态();
-							if (!初始化成功) return [];
-						}
-						const plaintextChunks = [];
-						while (true) {
-							if (入站状态.waitPayloadLength === null) {
-								const lengthCipherTotalLength = 2 + SSAEAD标签长度;
-								if (入站状态.buffer.byteLength < lengthCipherTotalLength) break;
-								const lengthCipher = 入站状态.buffer.subarray(0, lengthCipherTotalLength);
-								入站状态.buffer = 入站状态.buffer.subarray(lengthCipherTotalLength);
-								const lengthPlain = await SSAEAD解密(入站状态.decryptKey, 入站状态.nonceCounter, lengthCipher);
-								if (lengthPlain.byteLength !== 2) throw new Error('SS length decrypt failed');
-								const payloadLength = (lengthPlain[0] << 8) | lengthPlain[1];
-								if (payloadLength < 0 || payloadLength > 入站状态.加密配置.maxChunk) throw new Error(`SS payload length invalid: ${payloadLength}`);
-								入站状态.waitPayloadLength = payloadLength;
-							}
-							const payloadCipherTotalLength = 入站状态.waitPayloadLength + SSAEAD标签长度;
-							if (入站状态.buffer.byteLength < payloadCipherTotalLength) break;
-							const payloadCipher = 入站状态.buffer.subarray(0, payloadCipherTotalLength);
-							入站状态.buffer = 入站状态.buffer.subarray(payloadCipherTotalLength);
-							const payloadPlain = await SSAEAD解密(入站状态.decryptKey, 入站状态.nonceCounter, payloadCipher);
-							plaintextChunks.push(payloadPlain);
-							入站状态.waitPayloadLength = null;
-						}
-						return plaintextChunks;
-					},
-				};
+				const 入站解密器 = 创建SSAEAD入站解密器(yourUUID, 请求加密方式, log);
 				let 出站加密器 = null;
 				const SS单批最大字节 = 32 * 1024;
 				const 获取出站加密器 = async () => {
 					if (出站加密器) return 出站加密器;
-					if (!入站状态.加密配置) throw new Error('SS cipher is not negotiated');
-					const 出站加密配置 = 入站状态.加密配置;
+					if (!入站解密器.config) throw new Error('SS cipher is not negotiated');
+					const 出站加密配置 = 入站解密器.config;
 					const 出站主密钥 = await SS派生主密钥(yourUUID, 出站加密配置.keyLen);
 					const 出站随机字节 = crypto.getRandomValues(new Uint8Array(出站加密配置.saltLen));
 					const 出站加密密钥 = await SS派生会话密钥(出站加密配置, 出站主密钥, 出站随机字节, ['encrypt']);
@@ -319,6 +237,7 @@ export async function 处理WS请求(request, yourUUID, url, 反代上下文 = {
 					首包已建立: false,
 					目标主机: '',
 					目标端口: 0,
+					目标头缓存: new Uint8Array(0),
 				};
 				return ss上下文;
 			})().finally(() => { ss初始化任务 = null });
@@ -328,73 +247,48 @@ export async function 处理WS请求(request, yourUUID, url, 反代上下文 = {
 
 	const 处理SS数据 = async (chunk) => {
 		const 上下文 = await 获取SS上下文();
-		let 明文块数组 = null;
 		try {
-			明文块数组 = await 上下文.入站解密器.输入(chunk);
+			await 上下文.入站解密器.输入(chunk, async (明文块) => {
+				if (WS本地测速模式) {
+					await 处理WS本地测速数据(明文块);
+					return;
+				}
+				let 已写入 = false;
+				try {
+					已写入 = await 写入远端(明文块, false);
+				} catch (err) {
+					if ((/** @type {any} */ (err))?.isQueueOverflow) throw err;
+					已写入 = false;
+				}
+				if (已写入) return;
+				if (上下文.首包已建立 && 上下文.目标主机 && 上下文.目标端口 > 0) {
+					await forwardataTCP(上下文.目标主机, 上下文.目标端口, 明文块, 上下文.回包Socket, null, remoteConnWrapper, yourUUID, request, 反代上下文);
+					return;
+				}
+				上下文.目标头缓存 = 拼接字节数据(上下文.目标头缓存, 明文块);
+				const 目标 = 解析SS目标地址(上下文.目标头缓存);
+				if (!目标) {
+					if (上下文.目标头缓存.byteLength > 259) throw new Error('SS target header exceeds 259 bytes');
+					return;
+				}
+				上下文.目标头缓存 = new Uint8Array(0);
+				if (isSpeedTestSite(目标.hostname)) {
+					await 启用WS本地测速模式(上下文.回包Socket, null, 目标.rawClientData);
+					return;
+				}
+				上下文.首包已建立 = true;
+				上下文.目标主机 = 目标.hostname;
+				上下文.目标端口 = 目标.port;
+				await forwardataTCP(目标.hostname, 目标.port, 目标.rawClientData, 上下文.回包Socket, null, remoteConnWrapper, yourUUID, request, 反代上下文);
+			});
 		} catch (err) {
 			const msg = err?.message || `${err}`;
-			if (msg.includes('Decryption failed') || msg.includes('SS handshake decrypt failed') || msg.includes('SS length decrypt failed')) {
+			if (err?.name === 'OperationError' || msg.includes('Decryption failed') || msg.includes('SS handshake decrypt failed')) {
 				log(`[SS入站] 解密失败，连接关闭: ${msg}`);
 				closeSocketQuietly(serverSock);
 				return;
 			}
 			throw err;
-		}
-		for (const 明文块 of 明文块数组) {
-			if (WS本地测速模式) {
-				await 处理WS本地测速数据(明文块);
-				continue;
-			}
-			let 已写入 = false;
-			try {
-				已写入 = await 写入远端(明文块, false);
-			} catch (err) {
-				if ((/** @type {any} */ (err))?.isQueueOverflow) throw err;
-				已写入 = false;
-			}
-			if (已写入) continue;
-			if (上下文.首包已建立 && 上下文.目标主机 && 上下文.目标端口 > 0) {
-				await forwardataTCP(上下文.目标主机, 上下文.目标端口, 明文块, 上下文.回包Socket, null, remoteConnWrapper, yourUUID, request, 反代上下文);
-				continue;
-			}
-			const 明文数据 = 数据转Uint8Array(明文块);
-			if (明文数据.byteLength < 3) throw new Error('invalid ss data');
-			const addressType = 明文数据[0];
-			let cursor = 1;
-			let hostname = '';
-			if (addressType === 1) {
-				if (明文数据.byteLength < cursor + 4 + 2) throw new Error('invalid ss ipv4 length');
-				hostname = `${明文数据[cursor]}.${明文数据[cursor + 1]}.${明文数据[cursor + 2]}.${明文数据[cursor + 3]}`;
-				cursor += 4;
-			} else if (addressType === 3) {
-				if (明文数据.byteLength < cursor + 1) throw new Error('invalid ss domain length');
-				const domainLength = 明文数据[cursor];
-				cursor += 1;
-				if (明文数据.byteLength < cursor + domainLength + 2) throw new Error('invalid ss domain data');
-				hostname = SS文本解码器.decode(明文数据.subarray(cursor, cursor + domainLength));
-				cursor += domainLength;
-			} else if (addressType === 4) {
-				if (明文数据.byteLength < cursor + 16 + 2) throw new Error('invalid ss ipv6 length');
-				const ipv6 = [];
-				const ipv6View = new DataView(明文数据.buffer, 明文数据.byteOffset + cursor, 16);
-				for (let i = 0; i < 8; i++) ipv6.push(ipv6View.getUint16(i * 2).toString(16));
-				hostname = ipv6.join(':');
-				cursor += 16;
-			} else {
-				throw new Error(`invalid ss addressType: ${addressType}`);
-			}
-			if (!hostname) throw new Error(`invalid ss address: ${addressType}`);
-			const port = (明文数据[cursor] << 8) | 明文数据[cursor + 1];
-			cursor += 2;
-			const rawClientData = 明文数据.subarray(cursor);
-			if (isSpeedTestSite(hostname)) {
-				await 启用WS本地测速模式(上下文.回包Socket, null, rawClientData);
-				return;
-			}
-			上下文.首包已建立 = true;
-			上下文.目标主机 = hostname;
-			上下文.目标端口 = port;
-			await forwardataTCP(hostname, port, rawClientData, 上下文.回包Socket, null, remoteConnWrapper, yourUUID, request, 反代上下文);
 		}
 	};
 
