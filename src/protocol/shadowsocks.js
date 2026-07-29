@@ -57,15 +57,13 @@ export async function SS派生会话密钥(config, masterKey, salt, usages) {
 }
 
 export async function SSAEAD加密(cryptoKey, nonceCounter, plaintext) {
-	const iv = nonceCounter.slice();
-	const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv, tagLength: 128 }, cryptoKey, plaintext);
+	const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonceCounter, tagLength: 128 }, cryptoKey, plaintext);
 	SS递增Nonce计数器(nonceCounter);
 	return new Uint8Array(ct);
 }
 
 export async function SSAEAD解密(cryptoKey, nonceCounter, ciphertext) {
-	const iv = nonceCounter.slice();
-	const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv, tagLength: 128 }, cryptoKey, ciphertext);
+	const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonceCounter, tagLength: 128 }, cryptoKey, ciphertext);
 	SS递增Nonce计数器(nonceCounter);
 	return new Uint8Array(pt);
 }
