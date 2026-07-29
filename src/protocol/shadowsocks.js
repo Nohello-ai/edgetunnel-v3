@@ -171,27 +171,31 @@ export function 创建SSAEAD入站解密器(passwordText, preferredMethod = '', 
 				return 0;
 			}
 			let processedRecords = 0;
-			while (true) {
-				if (state.waitPayloadLength === null) {
-					const lengthCipherLength = 2 + SSAEAD标签长度;
-					if (state.buffer.byteLength < lengthCipherLength) break;
-					const lengthPlain = await SSAEAD解密(state.decryptKey, state.nonceCounter, state.buffer.subarray(0, lengthCipherLength));
-					state.buffer = state.buffer.subarray(lengthCipherLength);
-					const payloadLength = (lengthPlain[0] << 8) | lengthPlain[1];
-					if (lengthPlain.byteLength !== 2 || payloadLength > state.config.maxChunk) throw new Error(`SS payload length invalid: ${payloadLength}`);
-					state.waitPayloadLength = payloadLength;
+			let readOffset = 0;
+			try {
+				while (true) {
+					if (state.waitPayloadLength === null) {
+						const lengthCipherLength = 2 + SSAEAD标签长度;
+						if (state.buffer.byteLength - readOffset < lengthCipherLength) break;
+						const lengthPlain = await SSAEAD解密(state.decryptKey, state.nonceCounter, state.buffer.subarray(readOffset, readOffset + lengthCipherLength));
+						readOffset += lengthCipherLength;
+						const payloadLength = (lengthPlain[0] << 8) | lengthPlain[1];
+						if (lengthPlain.byteLength !== 2 || payloadLength > state.config.maxChunk) throw new Error(`SS payload length invalid: ${payloadLength}`);
+						state.waitPayloadLength = payloadLength;
+					}
+					const payloadCipherLength = state.waitPayloadLength + SSAEAD标签长度;
+					if (state.buffer.byteLength - readOffset < payloadCipherLength) break;
+					if (processedRecords >= SS单块最大记录数) throw new Error(`SS records per message exceed ${SS单块最大记录数}`);
+					const payloadPlain = await SSAEAD解密(state.decryptKey, state.nonceCounter, state.buffer.subarray(readOffset, readOffset + payloadCipherLength));
+					readOffset += payloadCipherLength;
+					state.waitPayloadLength = null;
+					processedRecords += 1;
+					await onPlaintext(payloadPlain);
 				}
-				const payloadCipherLength = state.waitPayloadLength + SSAEAD标签长度;
-				if (state.buffer.byteLength < payloadCipherLength) break;
-				if (processedRecords >= SS单块最大记录数) throw new Error(`SS records per message exceed ${SS单块最大记录数}`);
-				const payloadPlain = await SSAEAD解密(state.decryptKey, state.nonceCounter, state.buffer.subarray(0, payloadCipherLength));
-				state.buffer = state.buffer.subarray(payloadCipherLength);
-				state.waitPayloadLength = null;
-				processedRecords += 1;
-				await onPlaintext(payloadPlain);
+			} finally {
+				state.buffer = readOffset === state.buffer.byteLength ? new Uint8Array(0) : state.buffer.slice(readOffset);
 			}
 			assertRetainedBufferLimit();
-			state.buffer = state.buffer.byteLength === 0 ? new Uint8Array(0) : state.buffer.slice();
 			return processedRecords;
 		},
 	};
