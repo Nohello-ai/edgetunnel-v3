@@ -1,391 +1,312 @@
 # edgetunnel-v3
 
-跑在 **Cloudflare Workers** 上的边缘隧道代理，面向手动构建、单文件发布和四段式版本发版。
+edgetunnel-v3 是一个运行在 **Cloudflare Workers** 上的轻量边缘隧道 Worker。项目采用模块化源码开发、单文件产物交付的结构，把代理入口、协议解析、订阅生成、管理面板和伪装页面集中在一个可直接部署的 Worker 中。
 
-客户端通过 Worker 建立 **VLESS / Trojan / Shadowsocks** 通道，再由 Worker 向目标站点发起 TCP/UDP 连接；同时提供管理面板、订阅生成、优选节点与伪装首页。
+当前版本：**v3.0.0.2**
 
-| 项 | 说明 |
-|----|------|
-| 运行时 | Cloudflare Workers（`nodejs_compat`） |
-| 协议 | VLESS · Trojan · Shadowsocks |
-| 传输 | WebSocket · gRPC · XHTTP |
-| 出站 | 直连 · ProxyIP · SOCKS5 / HTTP(S) / TURN |
-| 配置存储 | Workers KV（`KV` 绑定） |
-| 当前安全版本 | **v3.0.0.2**（运行时必填 **`ADMIN` + `KEY`**，见下方环境变量） |
-
-> **开发**：改 `src/` 模块。**交付**：手动触发构建工作流或运行 `npm run build`，生成 `dist/worker.js` 单文件后粘贴部署。版本采用 `3.0.0.2` 这种四段式格式。发版说明见 [RELEASE.md](./RELEASE.md)。
+版本规则采用四段式：`主版本.次版本.修订号.构建号`。例如 `3.0.0.2` 表示 3.0 系列的第 2 次构建级更新；后续大版本能力更新可进入 `3.1.0.x`。
 
 ---
 
-## 目录
+## Highlights
 
-1. [它是做什么的](#它是做什么的)
-2. [快速上手](#快速上手)
-3. [环境变量一览](#环境变量一览)
-4. [运行流程](#运行流程)
-5. [功能说明](#功能说明)
-6. [源码结构](#源码结构)
-7. [本地开发](#本地开发)
-8. [版本与回滚](#版本与回滚)
-
----
-
-## 它是做什么的
-
-```
-客户端 (v2ray / clash / sing-box …)
-        │  VLESS / Trojan / SS
-        │  经 WS / gRPC / XHTTP
-        ▼
- Cloudflare Worker (edgetunnel-v3)
-        │  解析协议头 → 建立出站连接
-        ▼
- 目标站点 / 反代节点 / SOCKS5 等
-```
-
-Worker 还负责：
-
-- **身份与密钥**：由 `ADMIN` + `KEY`（及可选 `UUID`）派生用户 ID 与鉴权
-- **订阅**：`/sub` 输出节点列表，并可走 Clash / Sing-box / Surge 转换
-- **管理后台**：`/login` → `/admin`，配置写入 KV
-- **伪装**：普通访问返回 nginx 页、动画页或反向代理到你指定的站点
-
----
-
-## 快速上手
-
-### 1. 准备 Cloudflare
-
-1. 创建 Worker，粘贴 `dist/worker.js`（或 `wrangler deploy`）
-2. 创建 **KV** 命名空间，绑定名必须为 **`KV`**
-3. 在 Worker 设置环境变量（至少 **`ADMIN` + `KEY`**）
-
-### 2. 最低可用配置
-
-| 变量 | 要求 |
+| 能力 | 说明 |
 |------|------|
-| **`ADMIN`** | **必填**（v3.0.0.2+）。管理面板登录口令；也可用 `PASSWORD` / `TOKEN` 等密码类变量。**不可**再用 `KEY` / `UUID` 顶替 |
-| **`KEY`** | **必填**（v3.0.0.2+）。随机字符串，**长度 ≥ 16**，不要用源码里的默认提示文案 |
-| **`UUID`**（推荐） | 标准 UUID v4；不设则由密码+KEY 用哈希派生 |
-| **KV 绑定** | 名称为 `KV`；无 KV 时部分能力会降级 |
+| Workers 原生运行 | 只面向 Cloudflare Workers，使用平台 TCP/TLS 能力 |
+| 单文件交付 | `src/**` 模块化开发，`dist/worker.js` 粘贴部署 |
+| 多协议入口 | 支持 VLESS、Trojan、Shadowsocks |
+| 多传输方式 | 支持 WebSocket、gRPC、XHTTP |
+| 多出站策略 | 支持直连、ProxyIP、SOCKS5、HTTP(S)、TURN |
+| 管理与订阅 | 提供 `/admin` 管理面板和 `/sub` 订阅输出 |
+| 安全默认值 | 必填 `ADMIN` + `KEY`，拒绝旧默认弱配置 |
+| 手动发布 | GitHub Actions 只保留手动构建与 Release 发布流程 |
 
-缺运行时必填变量时，Worker 对所有请求返回 **503**：
+---
 
-```json
-{ "error": "ADMIN_REQUIRED", "message": "请设置环境变量 ADMIN…" }
-```
+## Quick Start
 
-```json
-{ "error": "KEY_REQUIRED", "message": "请设置环境变量 KEY…" }
-```
+### 1. 准备 Cloudflare Worker
+
+1. 创建 Worker。
+2. 创建 Workers KV 命名空间，绑定名称设置为 `KV`。
+3. 设置环境变量 `ADMIN` 和 `KEY`。
+4. 复制 `dist/worker.js` 到 Cloudflare Workers 编辑器并部署。
+
+### 2. 最低配置
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `ADMIN` | 是 | 管理面板登录口令，参与 userID 派生 |
+| `KEY` | 是 | 主密钥，长度至少 16 位，参与鉴权、Cookie、订阅入口 |
+| `UUID` | 推荐 | 标准 UUID v4，未设置时由 `ADMIN + KEY` 派生 |
+| `KV` | 推荐 | Workers KV 绑定名，用于存储配置和日志 |
+
+缺少 `ADMIN` 或 `KEY` 时，Worker 会返回 `503`，避免以不安全配置启动。
 
 ### 3. 常用入口
 
-| 路径 | 作用 |
-|------|------|
+| 路径或请求 | 作用 |
+|------------|------|
 | `/login` | 管理登录 |
-| `/admin` | 管理面板（需 cookie） |
-| `/sub?token=...` | 订阅 |
-| `/{KEY}` | 快速跳转到带 token 的订阅（路径需与 KEY 完全一致） |
-| WebSocket Upgrade | 代理隧道 |
-| POST + gRPC / XHTTP | 代理隧道 |
-| 其他 GET | 伪装页 |
+| `/admin` | 管理面板 |
+| `/sub?token=...` | 订阅入口 |
+| `/{KEY}` | 快速跳转到带 token 的订阅入口 |
+| `/version?uuid=...` | 版本检测接口 |
+| WebSocket Upgrade | WS 隧道入口 |
+| POST + gRPC | gRPC 隧道入口 |
+| POST + XHTTP 特征 | XHTTP 隧道入口 |
+| 其他 GET | 伪装页或反向代理页面 |
 
 ---
 
-## 环境变量一览
+## What It Does
 
-变量可在 **Cloudflare Dashboard → Worker → Settings → Variables** 配置，也可写在 `wrangler.toml` 的 `[vars]`（密钥建议用 Dashboard Secrets，不要提交仓库）。
-
-### 身份与安全（核心）
-
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| **`ADMIN`** | **是** | 管理面板登录口令，并参与 userID 派生。别名（按优先级）：`admin` → `PASSWORD` → `password` → `pswd` → `TOKEN`。**不再**回退到 `KEY` / `UUID`。缺省 → **503 ADMIN_REQUIRED**。 |
-| **`KEY`** | **是** | 加密/鉴权主密钥。参与：userID 派生、登录 cookie、快速订阅路径。长度 ≥ 16；禁止使用旧默认中文提示串。缺省 → **503 KEY_REQUIRED**。 |
-| **`UUID`** / `uuid` | 推荐 | 客户端使用的用户 UUID（v4 格式）。未设置时用 `MD5MD5(管理员密码 + KEY)` 拼成类 UUID。 |
-
-### 节点与域名
-
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| **`HOST`** | 否 | 订阅里展示的节点域名/主机列表（可多条，逗号或换行）。不设则用当前请求的 hostname。 |
-| **`PATH`** | 否 | 默认传输路径（也可在 KV `config.json` 中配置）。以 `/` 开头；不设则配置里默认 `/`。 |
-
-### 出站与反代
-
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| **`PROXYIP`** | 否 | 默认反代落地地址列表（可多条，随机取一条）。不设时使用内置「机房.特征.域名」类默认兜底地址。 |
-| **`GO2SOCKS5`** | 否 | 追加到 SOCKS5 域名白名单的主机列表（整理成数组后合并）。命中白名单的目标可走 SOCKS5 等代理出站。 |
-
-出站类型还可由 **URL 查询参数 / 路径** 在单次连接上覆盖，例如：
-
-- `?socks5=user:pass@host:port`、`?http=`、`?https=`、`?turn=`
-- `?globalproxy`：代理全局生效
-- 路径中的链式代理：`/video/{加密载荷}`（载荷用 userID 相关密钥编解码）
-
-### 性能与拨号
-
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| **`TCP_CONCURRENT_DIAL`** | 否 | 直连 TCP 并发拨号数，默认实现侧 ≥1。未设置时若识别为移动（cmcc）会强制为 1。 |
-| **`PROXY_CONCURRENT_DIAL`** | 否 | 反代并发拨号数。 |
-| **`PRELOAD_RACE_DIAL`** | 否 | `1` / `true` 开启预加载竞速拨号。 |
-
-### 订阅与日志
-
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| **`BEST_SUB`** | 否 | `1` / `true` 时，在特定 UA + 占位 host/uuid 条件下可作为「优选订阅生成器」模式。 |
-| **`OFF_LOG`** | 否 | `1` / `true` 时关闭写入 KV 的访问日志（`log.json`）。 |
-| **`DEBUG`** | 否 | `1` / `true` 打开调试日志。 |
-
-### 伪装页
-
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| **`URL`** | 否 | 伪装页来源：`nginx`（默认，内置 nginx 风格页）、`1101`（内置动画/HTML 页）、或 `https://example.com`（反代该站并替换 Host）。 |
-
-### 绑定（非 vars）
-
-| 绑定名 | 类型 | 说明 |
-|--------|------|------|
-| **`KV`** | KV Namespace | 存储 `config.json`、`log.json`、`tg.json`、`cf.json`、`ADD.txt` 等。无 KV 且未设 `UUID` 时，管理相关能力会引导到 noKV 提示页。 |
-
-### 环境变量关系简图
-
+```text
+客户端
+  -> Cloudflare Worker
+  -> 解析 VLESS / Trojan / Shadowsocks 首包
+  -> 选择直连或代理出站
+  -> 建立目标 TCP / DNS 转发链路
+  -> 双向流式转发
 ```
-ADMIN ──► 登录口令 / 参与 userID 派生（密码类变量；不与 KEY 混用）
-KEY   ──► 加密/cookie/快速订阅路径 / 参与 userID 派生
-UUID  ──► 若合法则固定为客户端 UUID，否则由 ADMIN+KEY 哈希派生
-HOST  ──► 订阅节点域名
-PROXYIP / GO2SOCKS5 / 查询参数 ──► 出站怎么走
-URL   ──► 普通人打开网站看到什么
-KV    ──► 面板里改的配置落在哪
-```
+
+edgetunnel-v3 主要负责五件事：
+
+1. 接收客户端通过 WS、gRPC、XHTTP 发起的隧道请求。
+2. 解析 VLESS、Trojan、Shadowsocks 协议头和目标地址。
+3. 按配置选择直连、ProxyIP、SOCKS5、HTTP(S)、TURN 出站。
+4. 生成 Clash、Sing-box、Surge 等客户端可用的订阅内容。
+5. 提供管理面板、KV 配置存储、伪装页面和版本检测能力。
 
 ---
 
-## 运行流程
+## Architecture
 
-### 总览（每次 `fetch`）
+| 模块 | 路径 | 说明 |
+|------|------|------|
+| Worker 入口 | `src/index.js` | 请求分流、鉴权、管理、订阅、伪装页 |
+| 协议解析 | `src/protocol/` | VLESS、Trojan、Shadowsocks |
+| 传输层 | `src/transport/` | WebSocket、gRPC、XHTTP |
+| 出站连接 | `src/connector/` | SOCKS5、HTTP(S)、TURN、连接工厂 |
+| 流处理 | `src/stream/` | 上行队列、下行 grain、双向 pipe |
+| 网络工具 | `src/net/` | 地址解析、DoH、运营商识别、代理参数 |
+| 配置系统 | `src/config/` | KV 配置读取、schema 校验、日志 |
+| 订阅适配 | `src/subscription/` | Clash、Sing-box、Surge 热补丁 |
+| 页面 | `src/pages/` | 内置伪装页 |
+| 构建脚本 | `scripts/build.mjs` | esbuild 打包为 `dist/worker.js` |
 
-```
+构建产物只有一个核心文件：`dist/worker.js`。
+
+---
+
+## Runtime Flow
+
+```text
 请求进入 Worker
-    │
-    ├─ 1. 规范化 URL（处理异常编码的 ? 等）
-    ├─ 2. 读取 env → 校验 ADMIN + KEY（失败则 503）
-    ├─ 3. 派生/缓存 userID
-    ├─ 4. 解析 HOST 列表、调试/拨号参数、默认 PROXYIP
-    │
-    ├─ 路径/方法分流 ──┬── /version          → 版本校验接口
-    │                  ├── Upgrade: websocket → WS 隧道
-    │                  ├── POST + gRPC/XHTTP  → gRPC / XHTTP 隧道
-    │                  └── 其他 HTTP
-    │                         ├── 强制 HTTPS
-    │                         ├── 无管理员密码 → noADMIN 页
-    │                         ├── 有 KV：
-    │                         │     /{KEY} → 跳转 /sub?token=...
-    │                         │     /login → 登录
-    │                         │     /admin/* → 管理 API / 面板
-    │                         │     /logout  → 清 cookie
-    │                         │     /sub     → 订阅
-    │                         │     …
-    │                         └── 伪装页（URL / nginx / 1101）
+  -> 规范化 URL
+  -> 校验 ADMIN 和 KEY
+  -> 派生或读取 UUID
+  -> 解析 HOST、PROXYIP、代理参数和拨号参数
+  -> 按路径、方法、Header 分流
 ```
 
-### 隧道数据流（WS / gRPC / XHTTP）
+分流规则：
 
-```
-客户端首包
-    → transport 层收齐数据
-    → protocol 层识别 VLESS / Trojan / SS，解析目标 host:port
-    → connector 按反代上下文出站：
-         · 直连 TCP
-         · 或 PROXYIP / SOCKS5 / HTTP(S) / TURN
-    → stream 层双向转发（队列合包、grain 下行等）
-    → 连接结束或失败时清理
-```
-
-### 订阅流（`/sub`）
-
-```
-校验 token（与 MD5MD5(host + userID) 等规则匹配）
-    → 读 KV config + 优选 IP（本地随机 / ADD.txt / 外部 SUB）
-    → 生成节点列表（协议 + 传输 + 路径 + UUID）
-    → 按 UA / 参数做 Clash / Sing-box / Surge 热补丁或 base64 原始订阅
-    → 返回
-```
-
-### 管理流
-
-```
-POST /login 校验 ADMIN
-    → Set-Cookie: auth = hash(UA + KEY + ADMIN)
-GET /admin*
-    → 校验 cookie
-    → 读写 KV 或返回静态管理页（Pages 托管的前端）
-```
+| 条件 | 处理 |
+|------|------|
+| `/version` | 返回当前版本号 |
+| WebSocket Upgrade | 进入 WS 隧道 |
+| POST + `application/grpc` | 进入 gRPC 隧道 |
+| POST + XHTTP 特征 | 进入 XHTTP 隧道 |
+| `/login` | 管理登录 |
+| `/admin/*` | 管理 API 或管理页面 |
+| `/sub` | 订阅生成 |
+| 普通 GET | 伪装页或反代页面 |
 
 ---
 
-## 功能说明
+## Protocols
 
-### 1. 多协议代理
-
-| 协议 | 模块 | 说明 |
-|------|------|------|
-| VLESS | `src/protocol/vless.js` | UUID 校验、地址类型解析 |
-| Trojan | `src/protocol/trojan.js` | 密码哈希头 + SOCKS 目标 |
-| Shadowsocks | `src/protocol/shadowsocks.js` | AEAD 等（含协议要求的 MD5 派生） |
-
-### 2. 多传输
-
-| 传输 | 模块 | 触发方式（概要） |
-|------|------|------------------|
-| WebSocket | `transport/ws.js` | `Upgrade: websocket` |
-| gRPC | `transport/grpc.js` | POST + `Content-Type: application/grpc` |
-| XHTTP | `transport/xhttp.js` | POST，或 Referer 带 `x_padding` 等特征 |
-
-### 3. 出站连接器
-
-| 类型 | 模块 |
+| 协议 | 说明 |
 |------|------|
-| 工厂选择 | `connector/factory.js` |
-| HTTP / HTTPS 代理 | `connector/http.js`（HTTPS 代理用平台原生 TLS） |
-| SOCKS5 | `connector/socks5.js` |
-| TURN | `connector/turn.js` |
+| VLESS | UUID 校验、版本校验、TCP / DNS UDP 支持 |
+| Trojan | SHA-224 密码头、SOCKS 风格目标地址解析 |
+| Shadowsocks | AEAD 入站解密、目标地址解析、nonce 递增校验 |
 
-支持默认 `PROXYIP`、白名单走 SOCKS5、URL 参数临时指定代理、以及加密链式代理路径。
+支持的传输方式：
 
-### 4. 订阅与客户端适配
+| 传输 | 说明 |
+|------|------|
+| WebSocket | 浏览器兼容度高，常规代理入口 |
+| gRPC | 适合 gRPC 客户端配置 |
+| XHTTP | 适合 XHTTP 流式请求入口 |
 
-- **`/sub`**：主订阅入口，token 鉴权  
-- **`/{KEY}`**：快速入口，302 到带 token 的 `/sub`  
-- **热补丁**：`subscription/clash.js` · `singbox.js` · `surge.js` 按客户端调整配置  
-- **优选**：本地随机 IP 库、KV `ADD.txt`、外部优选 API / SUB（面板可配）
+支持的出站方式：
 
-### 5. 管理面板与 KV
+| 出站 | 说明 |
+|------|------|
+| 直连 | Worker 平台 TCP 连接 |
+| ProxyIP | 使用反代地址池出站 |
+| SOCKS5 | 支持用户名密码认证 |
+| HTTP(S) | 支持 CONNECT，HTTPS 代理使用平台 TLS |
+| TURN | 支持 TURN CONNECT 出站链路 |
 
-| KV 键 | 用途 |
-|-------|------|
-| `config.json` | 主配置（协议、传输、反代、订阅转换、TG/CF 等） |
-| `log.json` | 访问/操作日志（可被 `OFF_LOG` 关闭） |
-| `tg.json` | Telegram Bot 通知 |
-| `cf.json` | Cloudflare 用量查询凭证 |
-| `ADD.txt` | 自定义优选 IP 列表 |
+---
+
+## Subscription
+
+`/sub` 用于生成客户端订阅。订阅 token 与当前 host、userID 相关，避免公开路径直接泄露节点配置。
+
+支持内容：
+
+| 类型 | 说明 |
+|------|------|
+| Mixed | 原始混合订阅 |
+| Clash / Mihomo | YAML 订阅热补丁 |
+| Sing-box | JSON 配置迁移和 TLS/ECH 补丁 |
+| Surge | WebSocket 参数热补丁 |
+| QuanX / Loon | 通过订阅转换参数适配 |
+
+优选来源：
+
+| 来源 | 说明 |
+|------|------|
+| 本地随机 IP | 根据配置随机生成 |
+| `ADD.txt` | KV 中维护的自定义优选列表 |
+| 外部 SUB/API | 从外部订阅或优选 API 拉取 |
+
+---
+
+## Admin Panel
+
+管理入口：`/login` -> `/admin`
+
+登录成功后会设置 `auth` Cookie。Cookie 与 `User-Agent`、`ADMIN`、`KEY` 相关，换浏览器或 UA 后需要重新登录。
 
 主要管理路径：
 
 | 路径 | 说明 |
 |------|------|
-| `/login` | 登录页 / POST 登录 |
-| `/admin` | 管理 UI |
-| `/admin/config.json` | GET/POST 配置 |
-| `/admin/init` | 重置为默认配置 |
-| `/admin/check` | 代理连通性检测 |
-| `/admin/log.json` | 日志 |
-| `/admin/ADD.txt` | 优选 IP |
-| `/admin/cf.json` · `/admin/tg.json` | CF / TG 配置 |
-| `/admin/getCloudflareUsage` | 查 CF 用量 |
-| `/admin/getADDAPI` | 验证优选 API |
-| `/logout` | 退出 |
+| `/admin/config.json` | 读取或保存主配置 |
+| `/admin/init` | 重置配置 |
+| `/admin/check` | 检测代理连通性 |
+| `/admin/log.json` | 查看日志 |
+| `/admin/ADD.txt` | 管理优选 IP 列表 |
+| `/admin/cf.json` | Cloudflare 用量配置 |
+| `/admin/tg.json` | Telegram 通知配置 |
+| `/logout` | 退出登录 |
 
-### 6. 伪装与杂项
+---
 
-| 功能 | 说明 |
+## Environment Variables
+
+| 变量 | 说明 |
 |------|------|
-| 伪装页 | `URL=nginx` / `1101` / 反代真实站点 |
-| `/version` | 带 UUID 校验的版本号接口 |
-| `/robots.txt` | `Disallow: /` |
-| 请求日志 | 可推 TG；可写 KV |
-| DoH / 运营商识别 | `net/doh.js` · `net/operator.js`，影响拨号策略等 |
+| `ADMIN` / `PASSWORD` / `TOKEN` | 管理登录口令，优先使用 `ADMIN` |
+| `KEY` | 主密钥，长度至少 16 位 |
+| `UUID` | 客户端 UUID，推荐固定设置 |
+| `HOST` | 订阅中展示的域名列表 |
+| `PATH` | 默认传输路径 |
+| `PROXYIP` | 默认反代地址列表 |
+| `GO2SOCKS5` | SOCKS5 白名单追加项 |
+| `TCP_CONCURRENT_DIAL` | 直连并发拨号数 |
+| `PROXY_CONCURRENT_DIAL` | 反代并发拨号数 |
+| `PRELOAD_RACE_DIAL` | 开启预加载 DNS 竞速拨号 |
+| `BEST_SUB` | 开启优选订阅生成器模式 |
+| `OFF_LOG` | 关闭 KV 日志写入 |
+| `DEBUG` | 打开调试日志 |
+| `URL` | 伪装页来源，支持 `nginx`、`1101` 或站点 URL |
 
-### 7. 安全相关（部署必读）
-
-- **v3.0.3+ 必须设置 `ADMIN` + `KEY`**，缺一则全站 503  
-- 登录 cookie 绑定 **User-Agent**，换浏览器/UA 需重新登录  
-
----
-
-## 源码结构
-
-本仓库刻意保持两层：
-
-| 层 | 路径 | 用途 |
-|----|------|------|
-| 模块源码 | `src/**` | 日常改功能、修 bug |
-| 单文件产物 | `dist/worker.js` | Dashboard 粘贴部署；由构建生成 |
-| 打包脚本 | `scripts/build.mjs` | esbuild 把 `src/index.js` 打成单文件 |
-| CI | `.github/workflows/` | push 重建 dist；打 tag 发 Release |
-
-```
-edgetunnel-v3/
-├── README.md                 ← 本页
-├── RELEASE.md                ← 发版与粘贴部署
-├── package.json              ← npm scripts + esbuild
-├── wrangler.toml             ← 本地 dev / deploy（可选）
-├── scripts/build.mjs         ← 模块 → 单文件
-├── .github/workflows/
-│   ├── build-dist.yml        ← main 上改 src 自动重建 dist
-│   └── release.yml           ← tag 发布 worker.js
-├── dist/
-│   └── worker.js             ← 唯一交付物（粘贴用）
-└── src/                      ← 模块化开发
-    ├── index.js
-    ├── constants.js
-    ├── state.js
-    ├── config/
-    ├── protocol/
-    ├── transport/
-    ├── connector/
-    ├── stream/
-    ├── net/
-    ├── subscription/
-    ├── pages/
-    ├── routes/
-    └── utils/
-```
+KV 绑定名固定为 `KV`。
 
 ---
 
-## 本地开发
+## Build And Release
 
-```bash
+本项目保留一个手动 GitHub Actions 工作流：`.github/workflows/build.yml`。
+
+手动触发后会执行：
+
+```text
 npm install
-npm run dev      # wrangler dev（模块入口 src/index.js）
-npm run build    # → dist/worker.js 单文件
-npm run deploy   # wrangler deploy（可选）
-npm run tail     # 实时日志
+  -> npm run build
+  -> 提交 dist/worker.js 和 dist/build-meta.json
+  -> 创建 v3.0.0.2 形式的 Git tag
+  -> 创建 GitHub Release
+  -> 上传 worker.js
 ```
 
-改完 `src/` 后务必 `npm run build`（或 push 到 `main` 让 CI 重建），再复制 `dist/worker.js` 部署。  
-部署前在 `wrangler.toml` 填真实 KV `id`，并配置 **`ADMIN` + `KEY`**（及推荐的 `UUID`）。
-
----
-
-## 版本与回滚
-
-| 标签 | 说明 |
-|------|------|
-| `v3.0.2-pre-require-key` | 强制 KEY 之前的基线 |
-| `v3.0.3` | 强制 ADMIN + KEY、拒绝默认密钥 |
+本地构建：
 
 ```bash
-# 回退到改 KEY 策略之前
-git checkout v3.0.2-pre-require-key
+# 安装依赖
+npm install
 
-# 使用当前强制 KEY 版本
-git checkout v3.0.3
+# 运行测试
+npm test
+
+# 构建单文件 Worker
+npm run build
 ```
 
-更细的发版步骤见 [RELEASE.md](./RELEASE.md)。
+构建完成后，复制 `dist/worker.js` 到 Cloudflare Workers Dashboard 即可部署。
 
 ---
 
-## 许可证与声明
+## Versioning
 
-本仓库用于在 **自有 Cloudflare 账号** 上部署边缘网络组件。请遵守当地法律法规与 Cloudflare 服务条款；勿用于未授权访问或攻击。
+版本采用四段式格式：
 
-如有问题，优先检查：`KEY` 是否已设且 ≥16 位、KV 是否绑定为 `KV`、订阅 `token` 是否与 `MD5MD5(host+userID)` 一致、客户端协议/传输是否与面板配置一致。
+```text
+主版本.次版本.修订号.构建号
+```
+
+示例：
+
+| 版本 | 说明 |
+|------|------|
+| `3.0.0.0` | 3.0 系列初始构建 |
+| `3.0.0.2` | 3.0 系列第 2 次构建级更新 |
+| `3.0.1.0` | 3.0 系列修订更新 |
+| `3.1.0.0` | 3.1 系列能力更新 |
+
+代码中的版本源：
+
+| 文件 | 说明 |
+|------|------|
+| `package.json` | npm 与 Release 使用的版本 |
+| `src/constants.js` | Worker `/version` 接口使用的版本 |
+| `dist/build-meta.json` | 构建产物元数据 |
+
+---
+
+## Security Notes
+
+部署前请确认：
+
+1. `ADMIN` 已设置。
+2. `KEY` 已设置且长度至少 16 位。
+3. KV 绑定名为 `KV`。
+4. `UUID` 使用标准 UUID v4。
+5. `dist/worker.js` 来自当前源码构建。
+
+本仓库用于在自有 Cloudflare 账号中部署边缘网络组件。请遵守服务条款和当地法律法规。
+
+---
+
+## Troubleshooting
+
+| 现象 | 检查项 |
+|------|--------|
+| 返回 `ADMIN_REQUIRED` | 检查 `ADMIN` 或密码类变量 |
+| 返回 `KEY_REQUIRED` | 检查 `KEY` 是否存在且长度达标 |
+| 管理面板无法保存 | 检查 KV 是否绑定为 `KV` |
+| 订阅为空 | 检查 token、HOST、UUID、KV 配置 |
+| 客户端无法连接 | 检查协议、传输路径、SNI、Host、反代参数 |
+| 版本不一致 | 检查 `package.json`、`src/constants.js` 和构建产物 |
+
+---
+
+## License
+
+本项目以仓库内许可证为准。
