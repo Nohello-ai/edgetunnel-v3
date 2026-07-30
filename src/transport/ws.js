@@ -75,10 +75,8 @@ export async function 处理WS请求(request, yourUUID, url, 反代上下文 = {
 	let WS本地测速首包响应头 = null;
 	const WS本地测速请求上限 = 64 * 1024;
 
-	const 发送WS本地测速响应 = async () => {
+	const 发送WS本地测速响应 = async (respHeader) => {
 		if (!WS本地测速回包Socket) return;
-		const respHeader = WS本地测速首包响应头;
-		WS本地测速首包响应头 = null;
 		await WebSocket发送并等待(WS本地测速回包Socket, 构造WS本地204响应(respHeader));
 	};
 
@@ -105,7 +103,8 @@ export async function 处理WS请求(request, yourUUID, url, 反代上下文 = {
 			if (!Number.isSafeInteger(contentLength) || requestLength > WS本地测速请求上限) throw new Error('WS local speed-test request body is too large');
 			if (WS本地测速请求缓存.byteLength < requestLength) return;
 			WS本地测速请求缓存 = WS本地测速请求缓存.slice(requestLength);
-			await 发送WS本地测速响应();
+			await 发送WS本地测速响应(WS本地测速首包响应头);
+			WS本地测速首包响应头 = null;
 		}
 	};
 

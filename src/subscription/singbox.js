@@ -278,6 +278,6 @@ export async function Singbox订阅配置文件热补丁(SingBox_原始订阅内
 		return JSON.stringify(config, null, 2);
 	} catch (e) {
 		console.error("Singbox热补丁执行失败:", e);
-		return JSON.stringify(JSON.parse(sb_json_text), null, 2);
+		return sb_json_text;
 	}
 }

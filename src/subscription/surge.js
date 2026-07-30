@@ -9,7 +9,7 @@ export function Surge订阅配置文件热补丁(content, url, config_JSON) {
 	let 输出内容 = "";
 	for (let x of 每行内容) {
 		if (x.includes('= tro' + 'jan,') && !x.includes('ws=true') && !x.includes('ws-path=')) {
-			const host = x.split("sni=")[1].split(",")[0];
+			const host = (x.split("sni=")[1] ?? "").split(",")[0];
 			const 备改内容 = `sni=${host}, skip-cert-verify=${config_JSON.跳过证书验证}`;
 			const 正确内容 = `sni=${host}, skip-cert-verify=${config_JSON.跳过证书验证}, ws=true, ws-path=${完整节点路径.replace(/,/g, '%2C')}, ws-headers=Host:"${host}"`;
 			输出内容 += x.replace(new RegExp(备改内容, 'g'), 正确内容).replace("[", "").replace("]", "") + '\n';

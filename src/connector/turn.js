@@ -254,6 +254,9 @@ export async function turnConnect(proxy, targetHost, targetPort, TCP连接) {
 						releaseDataReader();
 						controller.close();
 					} else if (value?.byteLength) controller.enqueue(new Uint8Array(value));
+				}).catch(error => {
+					releaseDataReader();
+					controller.error(error);
 				});
 			},
 			cancel() {

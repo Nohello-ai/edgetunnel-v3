@@ -40,8 +40,8 @@ export async function connectStreams(remoteSocket, webSocket, headerData, retryF
 		await 下行发送器.flush();
 	} catch (err) { readFailed = true; closeSocketQuietly(webSocket) }
 	finally {
-		try { await reader.cancel() } catch (e) { }
 		try { reader.releaseLock() } catch (e) { }
+		try { await reader.cancel() } catch (e) { }
 	}
 	if (!readFailed && !hasData && retryFunc) await retryFunc();
 }

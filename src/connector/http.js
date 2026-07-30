@@ -55,9 +55,13 @@ function 回灌CONNECT剩余数据(socket, bufferedData) {
 			}
 		},
 		cancel(reason) {
-			return sourceReader.cancel(reason).finally(() => {
+			try {
+				return sourceReader.cancel(reason).catch(() => {}).finally(() => {
+					try { sourceReader.releaseLock() } catch (e) { }
+				});
+			} catch (e) {
 				try { sourceReader.releaseLock() } catch (e) { }
-			});
+			}
 		}
 	});
 	return { readable, writable: socket.writable, closed: socket.closed, close: () => socket.close() };

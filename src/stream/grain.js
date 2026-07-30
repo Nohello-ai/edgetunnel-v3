@@ -31,7 +31,7 @@ export function 创建下行Grain发送器(webSocket, headerData = null) {
 	};
 
 	const flush = async () => {
-		while (flushPromise) await flushPromise;
+		await flushPromise;
 		if (flushTimer) clearTimeout(flushTimer);
 		flushTimer = null;
 		microtaskQueued = false;
