@@ -1,4 +1,5 @@
 import { 数据转Uint8Array, 拼接字节数据, 有效数据长度 } from '../utils/bytes.js';
+import { md5TextBytes } from '../utils/crypto.js';
 import { stripIPv6Brackets, isIPv4 } from '../net/address.js';
 import { DoH查询 } from '../net/doh.js';
 
@@ -172,7 +173,7 @@ export async function turnConnect(proxy, targetHost, targetPort, TCP连接) {
 			if (!realmBytes || !nonce?.byteLength) throw new Error('TURN authentication challenge is missing realm or nonce');
 
 			const realm = textDecoder.decode(realmBytes);
-			integrityKey = new Uint8Array(await crypto.subtle.digest('MD5', textEncoder.encode(`${proxy.username}:${realm}:${proxy.password}`)));
+			integrityKey = md5TextBytes(`${proxy.username}:${realm}:${proxy.password}`);
 			authAttributes = [
 				createTurnStunAttribute(TURN_STUN_ATTR.USERNAME, textEncoder.encode(proxy.username)),
 				createTurnStunAttribute(TURN_STUN_ATTR.REALM, textEncoder.encode(realm)),

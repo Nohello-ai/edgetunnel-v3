@@ -63,16 +63,15 @@ export async function 反代参数获取(url, uuid, 默认反代IP = '', 默认�
 		}
 	}
 
-	我的SOCKS5账号 = searchParams.get('socks5') || searchParams.get('http') || searchParams.get('https') || searchParams.get('turn') || searchParams.get('sstp') || null;
+	我的SOCKS5账号 = searchParams.get('socks5') || searchParams.get('http') || searchParams.get('https') || searchParams.get('turn') || null;
 	启用SOCKS5全局反代 = searchParams.has('globalproxy');
 	if (searchParams.get('socks5')) 启用SOCKS5反代 = 'socks5';
 	else if (searchParams.get('http')) 启用SOCKS5反代 = 'http';
 	else if (searchParams.get('https')) 启用SOCKS5反代 = 'https';
 	else if (searchParams.get('turn')) 启用SOCKS5反代 = 'turn';
-	else if (searchParams.get('sstp')) 启用SOCKS5反代 = 'sstp';
 
 	const 解析代理URL = (值, 强制全局 = true) => {
-		const 匹配 = /^(socks5|http|https|turn|sstp):\/\/(.+)$/i.exec(值 || '');
+		const 匹配 = /^(socks5|http|https|turn):\/\/(.+)$/i.exec(值 || '');
 		if (!匹配) return false;
 		启用SOCKS5反代 = 匹配[1].toLowerCase();
 		我的SOCKS5账号 = 匹配[2].split('/')[0];
@@ -115,16 +114,16 @@ export async function 反代参数获取(url, uuid, 默认反代IP = '', 默认�
 			return 反代上下文;
 		}
 	} else {
-		let 匹配 = /\/(socks5?|http|https|turn|sstp):\/?\/?([^/?#\s]+)/i.exec(pathname);
+		let 匹配 = /\/(socks5?|http|https|turn):\/?\/?([^/?#\s]+)/i.exec(pathname);
 		if (匹配) {
 			const 类型 = 匹配[1].toLowerCase();
 			启用SOCKS5反代 = 类型 === 'sock' || 类型 === 'socks' ? 'socks5' : 类型;
 			我的SOCKS5账号 = 匹配[2].split('/')[0];
 			启用SOCKS5全局反代 = true;
-		} else if ((匹配 = /\/(g?s5|socks5|g?http|g?https|g?turn|g?sstp)=([^/?#\s]+)/i.exec(pathname))) {
+		} else if ((匹配 = /\/(g?s5|socks5|g?http|g?https|g?turn)=([^/?#\s]+)/i.exec(pathname))) {
 			const 类型 = 匹配[1].toLowerCase();
 			我的SOCKS5账号 = 匹配[2].split('/')[0];
-			启用SOCKS5反代 = 类型.includes('sstp') ? 'sstp' : (类型.includes('turn') ? 'turn' : (类型.includes('https') ? 'https' : (类型.includes('http') ? 'http' : 'socks5')));
+			启用SOCKS5反代 = 类型.includes('turn') ? 'turn' : (类型.includes('https') ? 'https' : (类型.includes('http') ? 'http' : 'socks5'));
 			if (类型.startsWith('g')) 启用SOCKS5全局反代 = true;
 		} else if ((匹配 = /\/(proxyip[.=]|pyip=|ip=)([^?#\s]+)/.exec(pathLower))) {
 			const 路径反代值 = 提取路径值(匹配[2]);
@@ -148,7 +147,6 @@ export async function 反代参数获取(url, uuid, 默认反代IP = '', 默认�
 		else if (searchParams.get('http')) 启用SOCKS5反代 = 'http';
 		else if (searchParams.get('https')) 启用SOCKS5反代 = 'https';
 		else if (searchParams.get('turn')) 启用SOCKS5反代 = 'turn';
-		else if (searchParams.get('sstp')) 启用SOCKS5反代 = 'sstp';
 		else 启用SOCKS5反代 = 启用SOCKS5反代 || 'socks5';
 	} catch (err) {
 		console.error('解析SOCKS5地址失败:', err.message);
@@ -158,14 +156,14 @@ export async function 反代参数获取(url, uuid, 默认反代IP = '', 默认�
 	return 反代上下文;
 }
 
-export const 反代协议默认端口 = { socks5: 1080, http: 80, https: 443, turn: 3478, sstp: 443 };
+export const 反代协议默认端口 = { socks5: 1080, http: 80, https: 443, turn: 3478 };
 export function 获取代理默认端口(类型) {
 	return 反代协议默认端口[String(类型 || '').toLowerCase()] || 80;
 }
 
 export const SOCKS5账号Base64正则 = /^(?:[A-Z0-9+/]{4})*(?:[A-Z0-9+/]{2}==|[A-Z0-9+/]{3}=)?$/i, IPv6方括号正则 = /^\[.*\]$/;
 export function 获取SOCKS5账号(address, 默认端口 = 80) {
-	address = String(address || '').trim().replace(/^(socks5|http|https|turn|sstp):\/\//i, '').split('#')[0].trim();
+	address = String(address || '').trim().replace(/^(socks5|http|https|turn):\/\//i, '').split('#')[0].trim();
 	const firstAt = address.lastIndexOf("@");
 	if (firstAt !== -1) {
 		let auth = address.slice(0, firstAt).replace(/%3D/ig, '=');

@@ -6,7 +6,7 @@ import { 创建上行写入队列 } from '../stream/queue.js';
 import { forwardataTCP, forwardataudp } from '../stream/forward.js';
 import { VLESS文本解码器, UUID字节匹配 } from '../protocol/vless.js';
 import { 转发木马UDP数据, 解析木马请求 } from '../protocol/trojan.js';
-import { sha224 } from '../utils/crypto.js';
+import { sha224Text } from '../utils/crypto.js';
 
 export async function 处理XHTTP请求(request, yourUUID, 反代上下文 = {}) {
 	if (!request.body) return new Response('Bad Request', { status: 400 });
@@ -231,7 +231,7 @@ export async function 读取XHTTP首包(reader, token) {
 	};
 
 	const 尝试解析木马首包 = (data) => {
-		const 密码哈希 = sha224(token);
+		const 密码哈希 = sha224Text(token);
 		const 密码哈希字节 = new TextEncoder().encode(密码哈希);
 		const length = data.byteLength;
 		if (length < 58) return { 状态: 'need_more' };

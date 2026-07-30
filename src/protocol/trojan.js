@@ -1,5 +1,5 @@
 import { 数据转Uint8Array, 拼接字节数据, 有效数据长度 } from '../utils/bytes.js';
-import { sha224 } from '../utils/crypto.js';
+import { sha224Text } from '../utils/crypto.js';
 import { stripIPv6Brackets } from '../net/address.js';
 import { 创建请求TCP连接器 } from '../connector/factory.js';
 import { connectStreams } from '../stream/pipe.js';
@@ -33,7 +33,7 @@ export async function 连接木马反代(首包数据, TCP连接, 木马反代�
 	const socket = TCP连接({ hostname: stripIPv6Brackets(木马反代目标.hostname), port: 木马反代目标.port });
 	let writer = null;
 	try {
-		if (socket.opened) await socket.opened;
+		await (socket.opened ?? Promise.resolve());
 		if (有效数据长度(首包数据) > 0) {
 			writer = socket.writable.getWriter();
 			await writer.write(数据转Uint8Array(首包数据));
@@ -152,7 +152,7 @@ export async function 转发木马UDP数据(chunk, webSocket, 上下文, request
 
 export function 解析木马请求(buffer, passwordPlainText) {
 	const data = 数据转Uint8Array(buffer);
-	const sha224Password = sha224(passwordPlainText);
+	const sha224Password = sha224Text(passwordPlainText);
 	if (data.byteLength < 58) return { hasError: true, message: "invalid data" };
 	let crLfIndex = 56;
 	if (data[crLfIndex] !== 0x0d || data[crLfIndex + 1] !== 0x0a) return { hasError: true, message: "invalid header format" };

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { 安全解码URIComponent, 解析主机端口, 解析端口 } from '../src/net/address.js';
 import { 解析地址端口字符串 } from '../src/net/address-resolver.js';
-import { 反代参数获取, 获取SOCKS5账号 } from '../src/net/proxy.js';
+import { 反代参数获取, 获取SOCKS5账号, 获取代理默认端口 } from '../src/net/proxy.js';
 import { base64SecretEncode } from '../src/utils/base64.js';
 
 test('非法百分号编码保留原文且代理路径解析不抛出', async () => {
@@ -51,6 +51,28 @@ test('自定义路径 proxyip 与 socks5 语法保持兼容', async () => {
 	assert.deepEqual(socks.代理参数, { username: 'user', password: 'pass', hostname: '[2001:db8::1]', port: 1080 });
 });
 
+test('现存代理协议的查询参数和默认端口保持可用', async () => {
+	for (const [type, port] of [['socks5', 1080], ['http', 80], ['https', 443], ['turn', 3478]]) {
+		const result = await 反代参数获取(new URL(`https://example.com/?${type}=proxy.example`), 'uuid');
+		assert.equal(result.代理类型, type);
+		assert.equal(result.代理参数.hostname, 'proxy.example');
+		assert.equal(result.代理参数.port, port);
+		assert.equal(获取代理默认端口(type), port);
+	}
+});
+
+test('现存代理协议的 URL 路径和短路径保持可用', async () => {
+	for (const [type, alias] of [['socks5', 'socks5'], ['http', 'http'], ['https', 'https'], ['turn', 'turn']]) {
+		const urlPath = await 反代参数获取(new URL(`https://example.com/${type}://proxy.example`), 'uuid');
+		assert.equal(urlPath.代理类型, type);
+		assert.equal(urlPath.代理全局, true);
+
+		const shortPath = await 反代参数获取(new URL(`https://example.com/${alias}=proxy.example`), 'uuid');
+		assert.equal(shortPath.代理类型, type);
+		assert.equal(shortPath.代理参数.hostname, 'proxy.example');
+	}
+});
+
 test('链式代理 JSON 严格验证主机和端口', async () => {
 	const uuid = 'test-secret';
 	const valid = base64SecretEncode(JSON.stringify({ type: 'socks5', hostname: '[2001:db8::1]', port: 1080 }), uuid);
@@ -60,4 +82,14 @@ test('链式代理 JSON 严格验证主机和端口', async () => {
 	const invalid = base64SecretEncode(JSON.stringify({ type: 'socks5', hostname: 'bad host', port: 1080 }), uuid);
 	const rejected = await 反代参数获取(new URL(`https://example.com/video/${encodeURIComponent(invalid)}`), uuid);
 	assert.equal(rejected.代理类型, null);
+});
+
+test('链式代理接受所有现存代理类型', async () => {
+	const uuid = 'test-secret';
+	for (const [type, port] of [['socks5', 1080], ['http', 80], ['https', 443], ['turn', 3478]]) {
+		const payload = base64SecretEncode(JSON.stringify({ type, hostname: 'proxy.example', port }), uuid);
+		const result = await 反代参数获取(new URL(`https://example.com/video/${encodeURIComponent(payload)}`), uuid);
+		assert.equal(result.代理类型, type);
+		assert.equal(result.代理参数.port, port);
+	}
 });

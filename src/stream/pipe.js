@@ -3,7 +3,7 @@ import { 创建下行Grain发送器 } from '../stream/grain.js';
 import { 下行Grain包字节 } from '../constants.js';
 
 export async function connectStreams(remoteSocket, webSocket, headerData, retryFunc) {
-	let header = headerData, hasData = false, reader, useBYOB = false;
+	let header = headerData, hasData = false, readFailed = false, reader, useBYOB = false;
 	const BYOB单次读取上限 = 64 * 1024;
 	const 下行发送器 = 创建下行Grain发送器(webSocket, header);
 	header = null;
@@ -38,7 +38,10 @@ export async function connectStreams(remoteSocket, webSocket, headerData, retryF
 			}
 		}
 		await 下行发送器.flush();
-	} catch (err) { closeSocketQuietly(webSocket) }
-	finally { try { reader.cancel() } catch (e) { } try { reader.releaseLock() } catch (e) { } }
-	if (!hasData && retryFunc) await retryFunc();
+	} catch (err) { readFailed = true; closeSocketQuietly(webSocket) }
+	finally {
+		try { await reader.cancel() } catch (e) { }
+		try { reader.releaseLock() } catch (e) { }
+	}
+	if (!readFailed && !hasData && retryFunc) await retryFunc();
 }

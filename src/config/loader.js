@@ -2,7 +2,7 @@
  * 配置加载器
  */
 import { 特征码字典 } from '../constants.js';
-import { MD5MD5 } from '../utils/crypto.js';
+import { doubleMd5 } from '../utils/crypto.js';
 import { getCloudflareUsage } from '../utils/cloudflare.js';
 import { 获取传输协议配置, 获取传输路径参数值 } from '../net/proxy.js';
 import { 整理成数组, 掩码敏感信息 } from '../utils/misc.js';
@@ -46,7 +46,7 @@ export async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0
 			SUB: null,
 			SUBNAME: "edge" + "tunnel",
 			SUBUpdateTime: 3, // 订阅更新时间（小时）
-			TOKEN: await MD5MD5(hostname + userID),
+			TOKEN: await doubleMd5(hostname + userID),
 		},
 		订阅转换配置: {
 			SUBAPI: `https://SUBAPI.${特征码字典[1]}ssss.net`,
@@ -84,10 +84,6 @@ export async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0
 				TURN: {
 					全局: "turn://" + 占位符,
 					标准: "turn=" + 占位符
-				},
-				SSTP: {
-					全局: "sstp://" + 占位符,
-					标准: "sstp=" + 占位符
 				},
 			},
 		},
@@ -172,15 +168,10 @@ export async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0
 				全局: "turn://" + 占位符,
 				标准: "turn=" + 占位符
 			},
-			SSTP: {
-				全局: "sstp://" + 占位符,
-				标准: "sstp=" + 占位符
-			},
 		};
 	}
 	if (!config_JSON.反代.路径模板.HTTPS) config_JSON.反代.路径模板.HTTPS = { 全局: "https://" + 占位符, 标准: "https=" + 占位符 };
 	if (!config_JSON.反代.路径模板.TURN) config_JSON.反代.路径模板.TURN = { 全局: "turn://" + 占位符, 标准: "turn=" + 占位符 };
-	if (!config_JSON.反代.路径模板.SSTP) config_JSON.反代.路径模板.SSTP = { 全局: "sstp://" + 占位符, 标准: "sstp=" + 占位符 };
 
 	const 代理配置 = config_JSON.反代.路径模板[config_JSON.反代.SOCKS5.启用?.toUpperCase()];
 
@@ -213,7 +204,7 @@ export async function 读取config_JSON(env, hostname, userID, UA = "Mozilla/5.0
 	config_JSON.LINK = config_JSON.协议类型 === 'ss'
 		? `${config_JSON.协议类型}://${btoa(config_JSON.SS.加密方式 + ':' + userID)}@${host}:${config_JSON.SS.TLS ? '443' : '80'}?plugin=v2${encodeURIComponent(`ray-plugin;mode=websocket;host=${host};path=${((config_JSON.完整节点路径.includes('?') ? config_JSON.完整节点路径.replace('?', '?enc=' + config_JSON.SS.加密方式 + '&') : (config_JSON.完整节点路径 + '?enc=' + config_JSON.SS.加密方式)) + (config_JSON.SS.TLS ? ';tls' : ''))};mux=0`) + ECHLINK参数}#${encodeURIComponent(config_JSON.优选订阅生成.SUBNAME)}`
 		: `${config_JSON.协议类型}://${userID}@${host}:443?security=tls&type=${传输协议 + ECHLINK参数}&${域名字段名}=${host}&fp=${config_JSON.Fingerprint}&sni=${host}&${路径字段名}=${encodeURIComponent(传输路径参数值) + TLS分片参数}&encryption=none#${encodeURIComponent(config_JSON.优选订阅生成.SUBNAME)}`;
-	config_JSON.优选订阅生成.TOKEN = await MD5MD5(hostname + userID);
+	config_JSON.优选订阅生成.TOKEN = await doubleMd5(hostname + userID);
 
 	const 初始化TG_JSON = { BotToken: null, ChatID: null };
 	config_JSON.TG = { 启用: config_JSON.TG.启用 ? config_JSON.TG.启用 : false, ...初始化TG_JSON };

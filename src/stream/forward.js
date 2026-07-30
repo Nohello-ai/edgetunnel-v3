@@ -3,16 +3,14 @@ import { log } from '../utils/log.js';
 import { 创建请求TCP连接器 } from '../connector/factory.js';
 import { socks5Connect } from '../connector/socks5.js';
 import { httpConnect } from '../connector/http.js';
-import { httpsConnect } from '../connector/https.js';
 import { turnConnect } from '../connector/turn.js';
-import { sstpConnect } from '../connector/sstp.js';
 import { connectStreams } from '../stream/pipe.js';
 import { closeSocketQuietly, WebSocket发送并等待 } from '../stream/utils.js';
 import { 创建上行写入队列 } from '../stream/queue.js';
 import { isIPHostname, isIPv4 } from '../net/address.js';
 import { DoH查询 } from '../net/doh.js';
 import { 连接木马反代, 提取木马反代握手数据 } from '../protocol/trojan.js';
-import { 特征码字典 } from '../constants.js';
+import { 特征码字典, UDP上游DNS } from '../constants.js';
 import { getTCP并发拨号数, get反代并发拨号数, get预加载竞速拨号, getSOCKS5白名单 } from '../state.js';
 import { 解析地址端口 } from '../net/address-resolver.js';
 
@@ -32,10 +30,15 @@ export async function forwardataTCP(host, portNum, rawData, ws, respHeader, remo
 	const 木马反代握手数据 = 使用木马反代 ? 提取木马反代握手数据(木马反代首包数据, rawData) : null;
 
 	async function 等待连接建立(remoteSock, timeoutMs = 连接超时毫秒) {
-		await Promise.race([
-			remoteSock.opened,
-			new Promise((_, reject) => setTimeout(() => reject(new Error('连接超时')), timeoutMs))
-		]);
+		let timer;
+		try {
+			await Promise.race([
+				remoteSock.opened,
+				new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('连接超时')), timeoutMs) })
+			]);
+		} finally {
+			clearTimeout(timer);
+		}
 	}
 
 	async function 打开TCP连接(address, port) {
@@ -199,20 +202,10 @@ export async function forwardataTCP(host, portNum, rawData, ws, respHeader, remo
 				newSocket = await httpConnect(host, portNum, 本次首包数据, false, TCP连接, ctx代理参数);
 			} else if (ctx代理类型 === 'https') {
 				log(`[HTTPS代理] 代理到: ${host}:${portNum}`);
-				newSocket = isIPHostname(ctx代理参数.hostname)
-					? await httpsConnect(host, portNum, 本次首包数据, TCP连接, ctx代理参数)
-					: await httpConnect(host, portNum, 本次首包数据, true, TCP连接, ctx代理参数);
+				newSocket = await httpConnect(host, portNum, 本次首包数据, true, TCP连接, ctx代理参数);
 			} else if (ctx代理类型 === 'turn') {
 				log(`[TURN代理] 代理到: ${host}:${portNum}`);
 				newSocket = await turnConnect(ctx代理参数, host, portNum, TCP连接);
-				if (有效数据长度(本次首包数据) > 0) {
-					const writer = newSocket.writable.getWriter();
-					try { await writer.write(数据转Uint8Array(本次首包数据)) }
-					finally { try { writer.releaseLock() } catch (e) { } }
-				}
-			} else if (ctx代理类型 === 'sstp') {
-				log(`[SSTP代理] 代理到: ${host}:${portNum}`);
-				newSocket = await sstpConnect(ctx代理参数, host, portNum, TCP连接);
 				if (有效数据长度(本次首包数据) > 0) {
 					const writer = newSocket.writable.getWriter();
 					try { await writer.write(数据转Uint8Array(本次首包数据)) }
@@ -241,11 +234,11 @@ export async function forwardataTCP(host, portNum, rawData, ws, respHeader, remo
 	remoteConnWrapper.retryConnect = async () => connecttoPry(!已通过代理发送首包);
 
 	if (ctx代理类型 && (ctx代理全局 || getSOCKS5白名单().some(p => new RegExp(`^${p.replace(/\*/g, '.*')}$`, 'i').test(host)))) {
-		log(`[TCP转发] 启用 SOCKS5/HTTP/HTTPS/TURN/SSTP 全局代理`);
+		log(`[TCP转发] 启用 SOCKS5/HTTP/HTTPS/TURN 全局代理`);
 		try {
 			await connecttoPry();
 		} catch (err) {
-			log(`[TCP转发] SOCKS5/HTTP/HTTPS/TURN/SSTP 代理连接失败: ${err.message}`);
+			log(`[TCP转发] SOCKS5/HTTP/HTTPS/TURN 代理连接失败: ${err.message}`);
 			throw err;
 		}
 	} else {
@@ -302,13 +295,13 @@ export async function 读取单条DNSoverTCP响应(reader) {
 export async function forwardataudp(udpChunk, webSocket, respHeader, request, 响应封装器 = null, TCP连接覆盖 = null) {
 	const 请求数据 = 数据转Uint8Array(udpChunk);
 	const 请求字节数 = 请求数据.byteLength;
-	log(`[UDP转发] 收到 DNS 请求: ${请求字节数}B -> 8.8.4.4:53`);
+	log(`[UDP转发] 收到 DNS 请求: ${请求字节数}B -> ${UDP上游DNS}:53`);
 	let tcpSocket = null;
 	let writer = null;
 	let reader = null;
 	try {
 		const TCP连接 = TCP连接覆盖 || 创建请求TCP连接器(request);
-		tcpSocket = TCP连接({ hostname: '8.8.4.4', port: 53 });
+		tcpSocket = TCP连接({ hostname: UDP上游DNS, port: 53 });
 		let 魏烈思Header = respHeader;
 		writer = tcpSocket.writable.getWriter();
 		await writer.write(请求数据);

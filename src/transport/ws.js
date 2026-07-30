@@ -1,6 +1,6 @@
 import { 数据转Uint8Array, 有效数据长度, 拼接字节数据 } from '../utils/bytes.js';
 import { log } from '../utils/log.js';
-import { sha224 } from '../utils/crypto.js';
+import { sha224Text } from '../utils/crypto.js';
 import { WS早期数据最大字节, WS早期数据最大头长度, 上行队列最大字节, 上行队列最大条目 } from '../constants.js';
 import { VLESS文本解码器, UUID字节匹配, 解析魏烈思请求 } from '../protocol/vless.js';
 import { 解析木马请求, 转发木马UDP数据 } from '../protocol/trojan.js';
@@ -15,7 +15,7 @@ export function 是有效WS早期数据(bytes, token) {
 	if (bytes.byteLength >= 18 && UUID字节匹配(bytes, 1, token)) return true;
 	if (bytes.byteLength < 58 || bytes[56] !== 0x0d || bytes[57] !== 0x0a) return false;
 
-	const trojanPassword = sha224(token);
+	const trojanPassword = sha224Text(token);
 	for (let i = 0; i < 56; i++) {
 		if (bytes[i] !== trojanPassword.charCodeAt(i)) return false;
 	}

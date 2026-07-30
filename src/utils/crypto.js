@@ -3,8 +3,8 @@
  */
 
 const 文本编码器 = new TextEncoder();
-const MD5MD5缓存 = new Map();
-const MD5MD5缓存上限 = 256;
+const doubleMd5Cache = new Map();
+const doubleMd5CacheLimit = 256;
 
 function 字节转十六进制(bytes) {
 	let hex = '';
@@ -27,7 +27,7 @@ const MD5常量 = Array.from({ length: 64 }, (_, i) => Math.floor(Math.abs(Math.
  * @param {ArrayBuffer|ArrayBufferView} input
  * @returns {Uint8Array}
  */
-export function MD5字节(input) {
+export function md5Bytes(input) {
 	const bytes = input instanceof ArrayBuffer
 		? new Uint8Array(input)
 		: new Uint8Array(input.buffer, input.byteOffset, input.byteLength);
@@ -68,32 +68,41 @@ export function MD5字节(input) {
 }
 
 /**
+ * 文本输入的单层 MD5 字节摘要。
+ * @param {string} 文本
+ * @returns {Uint8Array}
+ */
+export function md5TextBytes(文本) {
+	return md5Bytes(文本编码器.encode(String(文本 ?? '')));
+}
+
+/**
  * 双重 MD5 哈希（isolate 内按输入文本缓存，避免热路径重复计算）
  * @param {string} 文本
  * @returns {Promise<string>} 十六进制哈希字符串
  */
-export async function MD5MD5(文本) {
+export async function doubleMd5(文本) {
 	const 键 = String(文本 ?? '');
-	const 命中 = MD5MD5缓存.get(键);
+	const 命中 = doubleMd5Cache.get(键);
 	if (命中) return 命中;
 
 	const 任务 = (async () => {
-		const 第一次哈希 = MD5字节(文本编码器.encode(键));
+		const 第一次哈希 = md5TextBytes(键);
 		const 第一次十六进制 = 字节转十六进制(第一次哈希);
-		const 第二次哈希 = MD5字节(文本编码器.encode(第一次十六进制.slice(7, 27)));
+		const 第二次哈希 = md5Bytes(文本编码器.encode(第一次十六进制.slice(7, 27)));
 		return 字节转十六进制(第二次哈希);
 	})();
 
-	MD5MD5缓存.set(键, 任务);
+	doubleMd5Cache.set(键, 任务);
 	try {
 		const 结果 = await 任务;
-		if (MD5MD5缓存.size > MD5MD5缓存上限) {
-			const 最旧键 = MD5MD5缓存.keys().next().value;
-			MD5MD5缓存.delete(最旧键);
+		if (doubleMd5Cache.size > doubleMd5CacheLimit) {
+			const 最旧键 = doubleMd5Cache.keys().next().value;
+			doubleMd5Cache.delete(最旧键);
 		}
 		return 结果;
 	} catch (error) {
-		MD5MD5缓存.delete(键);
+		doubleMd5Cache.delete(键);
 		throw error;
 	}
 }
@@ -103,7 +112,7 @@ export async function MD5MD5(文本) {
  * @param {string} s 输入字符串
  * @returns {string} 十六进制哈希字符串
  */
-export function sha224(s) {
+export function sha224Text(s) {
 	const K = [0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5, 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174, 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da, 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967, 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85, 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070, 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3, 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2];
 	const r = (n, b) => ((n >>> b) | (n << (32 - b))) >>> 0;
 	s = unescape(encodeURIComponent(s));
@@ -135,3 +144,5 @@ export function sha224(s) {
 	}
 	return hex;
 }
+
+export { md5Bytes as MD5字节, md5TextBytes as MD5文本字节, doubleMd5 as MD5MD5, sha224Text as sha224 };
