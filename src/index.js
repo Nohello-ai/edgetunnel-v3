@@ -28,8 +28,6 @@ import { getCloudflareUsage } from './utils/cloudflare.js';
 import { Clash订阅配置文件热补丁 } from './subscription/clash.js';
 import { Singbox订阅配置文件热补丁 } from './subscription/singbox.js';
 import { Surge订阅配置文件热补丁 } from './subscription/surge.js';
-import { nginx } from './pages/nginx.js';
-import { html1101 } from './pages/html1101.js';
 import { 处理WS请求 } from './transport/ws.js';
 import { 处理gRPC请求 } from './transport/grpc.js';
 import { 处理XHTTP请求 } from './transport/xhttp.js';
@@ -494,20 +492,22 @@ export default {
 		}
 
 		let 伪装页URL = env.URL || 'nginx';
-		if (伪装页URL && 伪装页URL !== 'nginx' && 伪装页URL !== '1101') {
+		const 内置伪装页路径 = (伪装页URL === 'nginx' || 伪装页URL === '1101') ? '/' + 伪装页URL : '';
+		if (内置伪装页路径) 伪装页URL = Pages静态页面 + 内置伪装页路径;
+		else if (伪装页URL) {
 			伪装页URL = 伪装页URL.trim().replace(/\/$/, '');
 			if (!伪装页URL.match(/^https?:\/\//i)) 伪装页URL = 'https://' + 伪装页URL;
 			if (伪装页URL.toLowerCase().startsWith('http://')) 伪装页URL = 'https://' + 伪装页URL.substring(7);
-			try { const u = new URL(伪装页URL); 伪装页URL = u.protocol + '//' + u.host } catch (e) { 伪装页URL = 'nginx' }
+			try { const u = new URL(伪装页URL); 伪装页URL = u.protocol + '//' + u.host } catch (e) { 伪装页URL = Pages静态页面 + '/nginx' }
 		}
-		if (伪装页URL === '1101') return new Response(await html1101(url.host, 访问IP), { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
 		try {
 			const 反代URL = new URL(伪装页URL), 新请求头 = new Headers(request.headers);
 			新请求头.set('Host', 反代URL.host);
 			新请求头.set('Referer', 反代URL.origin);
 			新请求头.set('Origin', 反代URL.origin);
 			if (!新请求头.has('User-Agent') && UA && UA !== 'null') 新请求头.set('User-Agent', UA);
-			const 反代响应 = await fetch(反代URL.origin + url.pathname + url.search, { method: request.method, headers: 新请求头, body: request.body, cf: request.cf });
+			const 反代路径 = 内置伪装页路径 || (url.pathname + url.search);
+			const 反代响应 = await fetch(反代URL.origin + 反代路径, { method: request.method, headers: 新请求头, body: request.body, cf: request.cf });
 			const 内容类型 = 反代响应.headers.get('content-type') || '';
 			// 只处理文本类型的响应
 			if (/text|javascript|json|xml/.test(内容类型)) {
@@ -518,6 +518,6 @@ export default {
 		} catch (error) {
 			log(`[伪装页] 反代失败: ${error?.message || error}`);
 		}
-		return new Response(await nginx(), { status: 200, headers: { 'Content-Type': 'text/html; charset=UTF-8' } });
+		return new Response('OK', { status: 200, headers: { 'Content-Type': 'text/plain; charset=UTF-8' } });
 	}
 };

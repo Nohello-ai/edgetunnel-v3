@@ -2,7 +2,7 @@
 
 edgetunnel-v3 是一个运行在 **Cloudflare Workers** 上的轻量边缘隧道 Worker。项目采用模块化源码开发、单文件产物交付的结构，把代理入口、协议解析、订阅生成、管理面板和伪装页面集中在一个可直接部署的 Worker 中。
 
-当前版本：**v3.0.0.2**
+当前版本：**v3.0.0.3**
 
 版本规则采用四段式：`主版本.次版本.修订号.构建号`。例如 `3.0.0.2` 表示 3.0 系列的第 2 次构建级更新；后续大版本能力更新可进入 `3.1.0.x`。
 
@@ -92,7 +92,7 @@ edgetunnel-v3 主要负责五件事：
 | 网络工具 | `src/net/` | 地址解析、DoH、运营商识别、代理参数 |
 | 配置系统 | `src/config/` | KV 配置读取、schema 校验、日志 |
 | 订阅适配 | `src/subscription/` | Clash、Sing-box、Surge 热补丁 |
-| 页面 | `src/pages/` | 内置伪装页 |
+| 页面 | `src/pages/` | 历史伪装页源码，默认构建已改为远程拉取 |
 | 构建脚本 | `scripts/build.mjs` | esbuild 打包为 `dist/worker.js` |
 
 构建产物只有一个核心文件：`dist/worker.js`。
@@ -215,7 +215,7 @@ edgetunnel-v3 主要负责五件事：
 | `BEST_SUB` | 开启优选订阅生成器模式 |
 | `OFF_LOG` | 关闭 KV 日志写入 |
 | `DEBUG` | 打开调试日志 |
-| `URL` | 伪装页来源，支持 `nginx`、`1101` 或站点 URL |
+| `URL` | 伪装页来源，支持远程拉取 `nginx`、`1101` 或反代站点 URL |
 
 KV 绑定名固定为 `KV`。
 
@@ -231,7 +231,7 @@ KV 绑定名固定为 `KV`。
 npm install
   -> npm run build
   -> 提交 dist/worker.js 和 dist/build-meta.json
-  -> 创建 v3.0.0.2 形式的 Git tag
+  -> 创建 v3.0.0.3 形式的 Git tag
   -> 创建 GitHub Release
   -> 上传 worker.js
 ```
@@ -267,6 +267,7 @@ npm run build
 |------|------|
 | `3.0.0.0` | 3.0 系列初始构建 |
 | `3.0.0.2` | 3.0 系列第 2 次构建级更新 |
+| `3.0.0.3` | 3.0 系列第 3 次构建级更新 |
 | `3.0.1.0` | 3.0 系列修订更新 |
 | `3.1.0.0` | 3.1 系列能力更新 |
 

@@ -2,7 +2,7 @@
  * 全局常量模块
  */
 
-export const Version = 'v3.0.0.2';
+export const Version = 'v3.0.0.3';
 
 export const Pages静态页面 = 'https://edt-pages.github.io';
 
