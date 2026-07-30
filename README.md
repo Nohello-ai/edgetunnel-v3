@@ -1,6 +1,6 @@
 # edgetunnel-v3
 
-跑在 **Cloudflare Workers** 上的边缘隧道代理（v3 模块化架构）。
+跑在 **Cloudflare Workers** 上的边缘隧道代理，面向手动构建、单文件发布和版本化发版。
 
 客户端通过 Worker 建立 **VLESS / Trojan / Shadowsocks** 通道，再由 Worker 向目标站点发起 TCP/UDP 连接；同时提供管理面板、订阅生成、优选节点与伪装首页。
 
@@ -11,9 +11,9 @@
 | 传输 | WebSocket · gRPC · XHTTP |
 | 出站 | 直连 · ProxyIP · SOCKS5 / HTTP(S) / TURN |
 | 配置存储 | Workers KV（`KV` 绑定） |
-| 当前安全版本 | **v3.0.3**（运行时必填 **`ADMIN` + `KEY`**，见下方环境变量） |
+| 当前安全版本 | **v3.0.1**（运行时必填 **`ADMIN` + `KEY`**，见下方环境变量） |
 
-> **开发**：改 `src/` 模块。**交付**：`npm run build` → `dist/worker.js` 单文件粘贴部署。发版说明见 [RELEASE.md](./RELEASE.md)。
+> **开发**：改 `src/` 模块。**交付**：手动触发构建工作流或运行 `npm run build`，生成 `dist/worker.js` 单文件后粘贴部署。发版说明见 [RELEASE.md](./RELEASE.md)。
 
 ---
 
@@ -64,8 +64,8 @@ Worker 还负责：
 
 | 变量 | 要求 |
 |------|------|
-| **`ADMIN`** | **必填**（v3.0.3+）。管理面板登录口令；也可用 `PASSWORD` / `TOKEN` 等密码类变量。**不可**再用 `KEY` / `UUID` 顶替 |
-| **`KEY`** | **必填**（v3.0.3+）。随机字符串，**长度 ≥ 16**，不要用源码里的默认提示文案 |
+| **`ADMIN`** | **必填**（v3.0.1+）。管理面板登录口令；也可用 `PASSWORD` / `TOKEN` 等密码类变量。**不可**再用 `KEY` / `UUID` 顶替 |
+| **`KEY`** | **必填**（v3.0.1+）。随机字符串，**长度 ≥ 16**，不要用源码里的默认提示文案 |
 | **`UUID`**（推荐） | 标准 UUID v4；不设则由密码+KEY 用哈希派生 |
 | **KV 绑定** | 名称为 `KV`；无 KV 时部分能力会降级 |
 

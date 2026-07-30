@@ -33,7 +33,7 @@ export async function forwardataTCP(host, portNum, rawData, ws, respHeader, remo
 		let timer;
 		try {
 			await Promise.race([
-				remoteSock.opened,
+				remoteSock.opened ?? new Promise(() => {}),
 				new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('连接超时')), timeoutMs) })
 			]);
 		} finally {

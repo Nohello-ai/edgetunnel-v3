@@ -175,6 +175,7 @@ export async function 读取XHTTP首包(reader, token) {
 	const 尝试解析魏烈思首包 = (data) => {
 		const length = data.byteLength;
 		if (length < 18) return { 状态: 'need_more' };
+		if (data[0] !== 0) return { 状态: 'invalid' };
 		if (!UUID字节匹配(data, 1, token)) return { 状态: 'invalid' };
 
 		const optLen = data[17];
