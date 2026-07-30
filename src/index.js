@@ -13,7 +13,7 @@ import {
 	set预加载竞速拨号, get预加载竞速拨号,
 	获取缓存身份, 获取缓存HOST列表
 } from './state.js';
-import { MD5MD5 } from './utils/crypto.js';
+import { doubleMd5 } from './utils/crypto.js';
 import { base64SecretEncode } from './utils/base64.js';
 import { log } from './utils/log.js';
 import { 整理成数组, 替换星号为随机字符, 随机路径 } from './utils/misc.js';
@@ -70,7 +70,7 @@ export default {
 		const { userID, userIDMD5 } = await 获取缓存身份(
 			`${管理员密码 ?? ''}\0${加密秘钥}\0${envUUID ?? ''}`,
 			async () => {
-				const md5 = await MD5MD5(管理员密码 + 加密秘钥);
+				const md5 = await doubleMd5(管理员密码 + 加密秘钥);
 				const id = (envUUID && uuidRegex.test(envUUID))
 					? envUUID.toLowerCase()
 					: [md5.slice(0, 8), md5.slice(8, 12), '4' + md5.slice(13, 16), '8' + md5.slice(17, 20), md5.slice(20)].join('-');
@@ -134,29 +134,29 @@ export default {
 				const 区分大小写访问路径 = url.pathname.slice(1);
 				if (区分大小写访问路径 === 加密秘钥) {//快速订阅（路径等于 KEY）
 					const params = new URLSearchParams(url.search);
-					params.set('token', await MD5MD5(host + userID));
+					params.set('token', await doubleMd5(host + userID));
 					return new Response('重定向中...', { status: 302, headers: { 'Location': `/sub?${params.toString()}` } });
 				} else if (访问路径 === 'login') {//处理登录页面和登录请求
 					const cookies = request.headers.get('Cookie') || '';
 					const authCookie = cookies.split(';').find(c => c.trim().startsWith('auth='))?.split('=')[1];
-					if (authCookie === await MD5MD5(UA + 加密秘钥 + 管理员密码)) return new Response('重定向中...', { status: 302, headers: { 'Location': '/admin' } });
+					if (authCookie === await doubleMd5(UA + 加密秘钥 + 管理员密码)) return new Response('重定向中...', { status: 302, headers: { 'Location': '/admin' } });
 					if (request.method === 'POST') {
 						const formData = await request.text();
 						const params = new URLSearchParams(formData);
 						const 输入密码 = params.get('password');
-						if (输入密码 === 管理员密码) {
-							// 密码正确，设置cookie并返回成功标记
-							const 响应 = new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
-							响应.headers.set('Set-Cookie', `auth=${await MD5MD5(UA + 加密秘钥 + 管理员密码)}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`);
-							return 响应;
-						}
+					if (输入密码 === 管理员密码) {
+						// 密码正确，设置cookie并返回成功标记
+						const 响应 = new Response(JSON.stringify({ success: true }), { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
+						响应.headers.set('Set-Cookie', `auth=${await doubleMd5(UA + 加密秘钥 + 管理员密码)}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`);
+						return 响应;
+					}
 					}
 					return fetch(Pages静态页面 + '/login');
 				} else if (访问路径 === 'admin' || 访问路径.startsWith('admin/')) {//验证cookie后响应管理页面
 					const cookies = request.headers.get('Cookie') || '';
 					const authCookie = cookies.split(';').find(c => c.trim().startsWith('auth='))?.split('=')[1];
 					// 没有cookie或cookie错误，跳转到/login页面
-					if (!authCookie || authCookie !== await MD5MD5(UA + 加密秘钥 + 管理员密码)) return new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
+					if (!authCookie || authCookie !== await doubleMd5(UA + 加密秘钥 + 管理员密码)) return new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
 					if (访问路径 === 'admin/log.json') {// 读取日志内容
 						const 读取日志内容 = await env.KV.get('log.json') || '[]';
 						return new Response(读取日志内容, { status: 200, headers: { 'Content-Type': 'application/json;charset=utf-8' } });
@@ -284,19 +284,19 @@ export default {
 
 					ctx.waitUntil(请求日志记录(env, request, 访问IP, 'Admin_Login', config_JSON));
 					return fetch(Pages静态页面 + '/admin' + url.search);
-				} else if (访问路径 === 'logout' || uuidRegex.test(访问路径)) {//清除cookie并跳转到登录页面
-					const 响应 = new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
-					响应.headers.set('Set-Cookie', 'auth=; Path=/; Max-Age=0; HttpOnly');
-					return 响应;
-				} else if (访问路径 === 'sub') {//处理订阅请求
-					const 订阅TOKEN = await MD5MD5(host + userID), 作为优选订阅生成器 = ['1', 'true'].includes(env.BEST_SUB) && url.searchParams.get('host') === 'example.com' && url.searchParams.get('uuid') === '00000000-0000-4000-8000-000000000000' && UA.toLowerCase().includes('tunnel (https://github.com/' + 特征码字典[1] + '/edge)');
-					const 请求TOKEN = url.searchParams.get('token');
+					} else if (访问路径 === 'logout' || uuidRegex.test(访问路径)) {//清除cookie并跳转到登录页面
+						const 响应 = new Response('重定向中...', { status: 302, headers: { 'Location': '/login' } });
+						响应.headers.set('Set-Cookie', 'auth=; Path=/; Max-Age=0; HttpOnly');
+						return 响应;
+					} else if (访问路径 === 'sub') {//处理订阅请求
+						const 订阅TOKEN = await doubleMd5(host + userID), 作为优选订阅生成器 = ['1', 'true'].includes(env.BEST_SUB) && url.searchParams.get('host') === 'example.com' && url.searchParams.get('uuid') === '00000000-0000-4000-8000-000000000000' && UA.toLowerCase().includes('tunnel (https://github.com/' + 特征码字典[1] + '/edge)');
+						const 请求TOKEN = url.searchParams.get('token');
 					const 用户客户端请求订阅 = 请求TOKEN === 订阅TOKEN;
 					const 当前日序号 = Math.floor(Date.now() / 86400000);
 					const 订阅转换后端TOKEN种子 = base64SecretEncode(订阅TOKEN, userID);
 					const [今日订阅转换后端专属TOKEN, 昨日订阅转换后端专属TOKEN] = await Promise.all([
-						MD5MD5(订阅转换后端TOKEN种子 + 当前日序号),
-						MD5MD5(订阅转换后端TOKEN种子 + (当前日序号 - 1)),
+						doubleMd5(订阅转换后端TOKEN种子 + 当前日序号),
+						doubleMd5(订阅转换后端TOKEN种子 + (当前日序号 - 1)),
 					]);
 					const 订阅转换后端请求订阅 = 请求TOKEN === 今日订阅转换后端专属TOKEN || 请求TOKEN === 昨日订阅转换后端专属TOKEN;
 					if (用户客户端请求订阅 || 订阅转换后端请求订阅 || 作为优选订阅生成器) {
@@ -415,7 +415,7 @@ export default {
 
 								let 完整节点路径 = config_JSON.完整节点路径;
 
-								const 链式代理匹配 = 节点备注.match(/\$(socks5|http|https|turn|sstp):\/\/([^#\s]+)/i);
+								const 链式代理匹配 = 节点备注.match(/\$(socks5|http|https|turn):\/\/([^#\s]+)/i);
 								if (链式代理匹配) {
 									try {
 										const 代理协议 = 链式代理匹配[1].toLowerCase(), 代理参数 = 链式代理匹配[2];
@@ -488,7 +488,7 @@ export default {
 				} else if (访问路径 === 'locations') {//反代locations列表
 					const cookies = request.headers.get('Cookie') || '';
 					const authCookie = cookies.split(';').find(c => c.trim().startsWith('auth='))?.split('=')[1];
-					if (authCookie && authCookie === await MD5MD5(UA + 加密秘钥 + 管理员密码)) return fetch(new Request('https://speed.cloudflare.com/locations', { headers: { 'Referer': 'https://speed.cloudflare.com/' } }));
+					if (authCookie && authCookie === await doubleMd5(UA + 加密秘钥 + 管理员密码)) return fetch(new Request('https://speed.cloudflare.com/locations', { headers: { 'Referer': 'https://speed.cloudflare.com/' } }));
 				} else if (访问路径 === 'robots.txt') return new Response('User-agent: *\nDisallow: /', { status: 200, headers: { 'Content-Type': 'text/plain; charset=UTF-8' } });
 			} else if (!envUUID) return fetch(Pages静态页面 + '/noKV').then(r => { const headers = new Headers(r.headers); headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); headers.set('Pragma', 'no-cache'); headers.set('Expires', '0'); return new Response(r.body, { status: 404, statusText: r.statusText, headers }) });
 		}

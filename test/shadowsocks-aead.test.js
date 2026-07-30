@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { MD5字节 } from '../src/utils/crypto.js';
+import { md5Bytes, md5TextBytes, doubleMd5 } from '../src/utils/crypto.js';
 
 import {
 	SS支持加密配置,
@@ -32,9 +32,15 @@ async function 构造AEAD流(password, method, payloads) {
 }
 
 test('MD5 字节实现符合标准向量', () => {
-	assert.equal(hex(MD5字节(new TextEncoder().encode(''))), 'd41d8cd98f00b204e9800998ecf8427e');
-	assert.equal(hex(MD5字节(new TextEncoder().encode('abc'))), '900150983cd24fb0d6963f7d28e17f72');
-	assert.equal(hex(MD5字节(new TextEncoder().encode('1234567890'.repeat(8)))), '57edf4a22be3c955ac49da2e2107b67a');
+	assert.equal(hex(md5Bytes(new TextEncoder().encode(''))), 'd41d8cd98f00b204e9800998ecf8427e');
+	assert.equal(hex(md5Bytes(new TextEncoder().encode('abc'))), '900150983cd24fb0d6963f7d28e17f72');
+	assert.equal(hex(md5Bytes(new TextEncoder().encode('1234567890'.repeat(8)))), '57edf4a22be3c955ac49da2e2107b67a');
+});
+
+test('MD5 文本字节提供单层摘要而 MD5MD5 仍保留双层输出', async () => {
+	assert.equal(hex(md5TextBytes('')), 'd41d8cd98f00b204e9800998ecf8427e');
+	assert.equal(hex(md5TextBytes('abc')), '900150983cd24fb0d6963f7d28e17f72');
+	assert.equal(await doubleMd5('abc'), 'f576baf8247333f9d23d9c5a71714f19');
 });
 
 test('Shadowsocks EVP_BytesToKey 主密钥符合固定向量', async () => {

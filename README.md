@@ -9,7 +9,7 @@
 | 运行时 | Cloudflare Workers（`nodejs_compat`） |
 | 协议 | VLESS · Trojan · Shadowsocks |
 | 传输 | WebSocket · gRPC · XHTTP |
-| 出站 | 直连 · ProxyIP · SOCKS5 / HTTP(S) / TURN / SSTP |
+| 出站 | 直连 · ProxyIP · SOCKS5 / HTTP(S) / TURN |
 | 配置存储 | Workers KV（`KV` 绑定） |
 | 当前安全版本 | **v3.0.3**（运行时必填 **`ADMIN` + `KEY`**，见下方环境变量） |
 
@@ -121,7 +121,7 @@ Worker 还负责：
 
 出站类型还可由 **URL 查询参数 / 路径** 在单次连接上覆盖，例如：
 
-- `?socks5=user:pass@host:port`、`?http=`、`?https=`、`?turn=`、`?sstp=`
+- `?socks5=user:pass@host:port`、`?http=`、`?https=`、`?turn=`
 - `?globalproxy`：代理全局生效
 - 路径中的链式代理：`/video/{加密载荷}`（载荷用 userID 相关密钥编解码）
 
@@ -203,7 +203,7 @@ KV    ──► 面板里改的配置落在哪
     → protocol 层识别 VLESS / Trojan / SS，解析目标 host:port
     → connector 按反代上下文出站：
          · 直连 TCP
-         · 或 PROXYIP / SOCKS5 / HTTP(S) / TURN / SSTP
+         · 或 PROXYIP / SOCKS5 / HTTP(S) / TURN
     → stream 层双向转发（队列合包、grain 下行等）
     → 连接结束或失败时清理
 ```
@@ -253,10 +253,9 @@ GET /admin*
 | 类型 | 模块 |
 |------|------|
 | 工厂选择 | `connector/factory.js` |
-| HTTP / HTTPS 代理 | `connector/http.js` · `https.js` |
+| HTTP / HTTPS 代理 | `connector/http.js`（HTTPS 代理用平台原生 TLS） |
 | SOCKS5 | `connector/socks5.js` |
 | TURN | `connector/turn.js` |
-| SSTP | `connector/sstp.js` |
 
 支持默认 `PROXYIP`、白名单走 SOCKS5、URL 参数临时指定代理、以及加密链式代理路径。
 
@@ -346,7 +345,6 @@ edgetunnel-v3/
     ├── subscription/
     ├── pages/
     ├── routes/
-    ├── tls/
     └── utils/
 ```
 

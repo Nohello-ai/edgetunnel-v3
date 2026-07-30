@@ -52,7 +52,6 @@ const 默认配置 = {
 			HTTP: { 全局: 'http://{{IP:PORT}}', 标准: 'http={{IP:PORT}}' },
 			HTTPS: { 全局: 'https://{{IP:PORT}}', 标准: 'https={{IP:PORT}}' },
 			TURN: { 全局: 'turn://{{IP:PORT}}', 标准: 'turn={{IP:PORT}}' },
-			SSTP: { 全局: 'sstp://{{IP:PORT}}', 标准: 'sstp={{IP:PORT}}' },
 		},
 	},
 	TG: { 启用: false, BotToken: null, ChatID: null },
@@ -86,7 +85,7 @@ test('部分嵌套配置只覆盖用户提供的字段', () => {
 	assert.equal(result.data.订阅转换配置.XUDP, false);
 });
 
-test('兼容加载时会保留未知扩展字段', () => {
+test('兼容加载时会保留根级未知扩展字段', () => {
 	const result = 安全规范化配置({
 		UUID: 默认配置.UUID,
 		HOST: 默认配置.HOST,
@@ -94,6 +93,29 @@ test('兼容加载时会保留未知扩展字段', () => {
 	}, 默认配置, 反代字段名);
 	assert.equal(result.success, true);
 	assert.deepEqual(result.data.自定义功能, { enabled: true });
+});
+
+test('代理路径模板只输出当前支持的字段', () => {
+	const result = 安全规范化配置({
+		UUID: 默认配置.UUID,
+		HOST: 默认配置.HOST,
+		反代: { 路径模板: { 未来协议: { 全局: 'future://x', 标准: 'future=x' } } },
+	}, 默认配置, 反代字段名);
+	assert.equal(result.success, true);
+	assert.equal(result.data.反代.路径模板.未来协议, undefined);
+	assert.deepEqual(Object.keys(result.data.反代.路径模板).sort(), ['HTTP', 'HTTPS', 'PROXYIP', 'SOCKS5', 'TURN']);
+});
+
+test('未知代理类型只会被禁用而不会使整份配置回退', () => {
+	const result = 安全规范化配置({
+		UUID: 默认配置.UUID,
+		HOST: 默认配置.HOST,
+		PATH: '/kept',
+		反代: { SOCKS5: { 启用: 'future' } },
+	}, 默认配置, 反代字段名);
+	assert.equal(result.success, true);
+	assert.equal(result.data.反代.SOCKS5.启用, null);
+	assert.equal(result.data.PATH, '/kept');
 });
 
 test('持久化输出剥离运行时、掩码和未知字段', () => {

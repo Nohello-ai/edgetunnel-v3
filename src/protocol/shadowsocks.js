@@ -1,5 +1,5 @@
 import { 数据转Uint8Array, 拼接字节数据 } from '../utils/bytes.js';
-import { MD5字节 } from '../utils/crypto.js';
+import { md5Bytes } from '../utils/crypto.js';
 import { SS入站缓存最大字节, SS单块最大记录数, SS主密钥缓存最大条目 } from '../constants.js';
 
 export const SS支持加密配置 = {
@@ -29,7 +29,7 @@ export async function SS派生主密钥(passwordText, keyLen) {
 		while (result.byteLength < keyLen) {
 			const input = new Uint8Array(prev.byteLength + pwBytes.byteLength);
 			input.set(prev, 0); input.set(pwBytes, prev.byteLength);
-			prev = MD5字节(input);
+			prev = md5Bytes(input);
 			result = 拼接字节数据(result, prev);
 		}
 		return result.slice(0, keyLen);

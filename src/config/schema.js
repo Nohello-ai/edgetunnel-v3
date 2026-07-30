@@ -25,6 +25,8 @@ export function 深度补齐配置(默认值, 用户值) {
 
 const 非空字符串 = z.string().check(z.minLength(1));
 const 可空字符串 = z.nullable(z.string());
+const 代理类型列表 = ['socks5', 'http', 'https', 'turn'];
+const 代理类型 = z.nullable(z.enum(代理类型列表));
 const 代理路径模板字段 = {
 	全局: z.string(),
 	标准: z.string(),
@@ -89,18 +91,17 @@ function 创建配置Schema(反代字段名, { 保留未知字段 = true, 持久
 		反代: object({
 			[反代字段名]: 非空字符串,
 			SOCKS5: object({
-				启用: 可空字符串,
+				启用: 代理类型,
 				全局: z.boolean(),
 				账号: z.string(),
 				白名单: z.array(z.string()),
 			}),
-			路径模板: object({
+			路径模板: z.object({
 				[反代字段名]: 非空字符串,
 				SOCKS5: 代理路径模板Schema,
 				HTTP: 代理路径模板Schema,
 				HTTPS: 代理路径模板Schema,
 				TURN: 代理路径模板Schema,
-				SSTP: 代理路径模板Schema,
 			}),
 		}),
 		TG: object(持久化 ? {
@@ -140,7 +141,10 @@ export function 安全规范化配置(用户配置, 默认配置, 反代字段�
 		};
 	}
 
-	return 创建配置Schema(反代字段名).safeParse(深度补齐配置(默认配置, 用户配置));
+	const 补齐后配置 = 深度补齐配置(默认配置, 用户配置);
+	const 启用类型 = 补齐后配置?.反代?.SOCKS5?.启用;
+	if (启用类型 !== null && !代理类型列表.includes(启用类型)) 补齐后配置.反代.SOCKS5.启用 = null;
+	return 创建配置Schema(反代字段名).safeParse(补齐后配置);
 }
 
 /**
