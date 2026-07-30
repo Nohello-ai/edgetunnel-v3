@@ -33,7 +33,7 @@ export async function 连接木马反代(首包数据, TCP连接, 木马反代�
 	const socket = TCP连接({ hostname: stripIPv6Brackets(木马反代目标.hostname), port: 木马反代目标.port });
 	let writer = null;
 	try {
-		if (socket.opened) await socket.opened;
+		await (socket.opened ?? Promise.resolve());
 		if (有效数据长度(首包数据) > 0) {
 			writer = socket.writable.getWriter();
 			await writer.write(数据转Uint8Array(首包数据));

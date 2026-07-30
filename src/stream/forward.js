@@ -10,7 +10,7 @@ import { 创建上行写入队列 } from '../stream/queue.js';
 import { isIPHostname, isIPv4 } from '../net/address.js';
 import { DoH查询 } from '../net/doh.js';
 import { 连接木马反代, 提取木马反代握手数据 } from '../protocol/trojan.js';
-import { 特征码字典 } from '../constants.js';
+import { 特征码字典, UDP上游DNS } from '../constants.js';
 import { getTCP并发拨号数, get反代并发拨号数, get预加载竞速拨号, getSOCKS5白名单 } from '../state.js';
 import { 解析地址端口 } from '../net/address-resolver.js';
 
@@ -228,9 +228,9 @@ export async function forwardataTCP(host, portNum, rawData, ws, respHeader, remo
 		} finally {
 			if (remoteConnWrapper.connectingPromise === 当前连接任务) {
 				remoteConnWrapper.connectingPromise = null;
-				}
 			}
 		}
+	}
 	remoteConnWrapper.retryConnect = async () => connecttoPry(!已通过代理发送首包);
 
 	if (ctx代理类型 && (ctx代理全局 || getSOCKS5白名单().some(p => new RegExp(`^${p.replace(/\*/g, '.*')}$`, 'i').test(host)))) {
@@ -295,13 +295,13 @@ export async function 读取单条DNSoverTCP响应(reader) {
 export async function forwardataudp(udpChunk, webSocket, respHeader, request, 响应封装器 = null, TCP连接覆盖 = null) {
 	const 请求数据 = 数据转Uint8Array(udpChunk);
 	const 请求字节数 = 请求数据.byteLength;
-	log(`[UDP转发] 收到 DNS 请求: ${请求字节数}B -> 8.8.4.4:53`);
+	log(`[UDP转发] 收到 DNS 请求: ${请求字节数}B -> ${UDP上游DNS}:53`);
 	let tcpSocket = null;
 	let writer = null;
 	let reader = null;
 	try {
 		const TCP连接 = TCP连接覆盖 || 创建请求TCP连接器(request);
-		tcpSocket = TCP连接({ hostname: '8.8.4.4', port: 53 });
+		tcpSocket = TCP连接({ hostname: UDP上游DNS, port: 53 });
 		let 魏烈思Header = respHeader;
 		writer = tcpSocket.writable.getWriter();
 		await writer.write(请求数据);

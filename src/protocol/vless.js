@@ -45,6 +45,7 @@ export function 解析魏烈思请求(chunk, token) {
 	const length = data.byteLength;
 	if (length < 24) return { hasError: true, message: 'Invalid data' };
 	const version = data[0];
+	if (version !== 0) return { hasError: true, message: `Invalid VLESS version: ${version}` };
 	if (!UUID字节匹配(data, 1, token)) return { hasError: true, message: 'Invalid uuid' };
 
 	const optLen = data[17];

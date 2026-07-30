@@ -30,6 +30,9 @@ export const 下行Grain包字节 = 32 * 1024;
 export const 下行Grain尾部阈值 = 512;
 export const 下行Grain静默毫秒 = 0;
 
+// UDP 转发的默认上游 DNS
+export const UDP上游DNS = '8.8.4.4';
+
 // 查杀特征码字典
 export const 特征码字典 = [
 	(Proxy.name + "IP").toUpperCase(),
