@@ -1,6 +1,6 @@
 {
   "name": "edgetunnel-v3",
-  "version": "3.0.1",
+  "version": "3.0.0.2",
   "description": "Cloudflare Workers edge tunnel: modular src/ + single-file dist/worker.js (VLESS/Trojan/Shadowsocks over WS/gRPC/XHTTP)",
   "type": "module",
   "main": "src/index.js",
